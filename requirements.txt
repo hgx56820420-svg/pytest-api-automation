@@ -1,0 +1,10 @@
+# 被测服务（app/）依赖
+#
+# 版本说明：本机 Python 3.14，pydantic-core 必须 >= 2.41 才有 cp314 预编译轮子，
+# 否则 pip 会尝试从源码编译（需要 Rust 工具链），在没网/没 Rust 的机器上直接失败。
+# 所以这里的 pydantic 不能降到 2.12 以下。
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+sqlalchemy==2.0.51
+pydantic==2.13.4
+PyJWT==2.10.1
