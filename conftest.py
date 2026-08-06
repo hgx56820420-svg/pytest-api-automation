@@ -1,7 +1,9 @@
 import pytest
 import uuid
 import requests
-BASE_URL="http://127.0.0.1:8010"
+import os
+
+BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8010")
 
 @pytest.fixture
 def base_url(): 
