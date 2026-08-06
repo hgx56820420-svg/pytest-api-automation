@@ -23,8 +23,8 @@
 | 阶段 | 内容 | 谁写 | 状态 |
 |---|---|---|---|
 | 1 | FastAPI 被测服务（靶子） | AI | 已完成 |
-| 2 | 裸写第一个测试（故意写丑，体会痛点） | **你** | 待开始 |
-| 3 | 封装 HTTP 客户端 + conftest fixture + 多环境配置 | **你** | 未开始 |
+| 2 | 裸写第一个测试（故意写丑，体会痛点） | **你** | 已完成 |
+| 3 | 封装 HTTP 客户端 + conftest fixture + 多环境配置 | **你** | 待开始 |
 | 4 | 数据驱动（parametrize）+ 响应结构校验 + faker 造数 | **你** | 未开始 |
 | 5 | Allure 报告 + GitHub Actions CI | **你** | 未开始 |
 | 6 | README（含架构图和设计决策说明） | **你** | 未开始 |
@@ -32,6 +32,23 @@
 阶段 2 的用意必须记住：**先用最笨的写法踩一遍坑**（URL 硬编码、每个用例重新登录、断言散乱），
 这样阶段 3 的每一层封装你才知道是在解决什么真实问题，面试时才讲得出来。
 不要跳过阶段 2 直接抄一个漂亮框架。
+
+### 阶段 2 完成情况（2026-08-06）
+
+`tests/test_auth.py` 写了 5 条用例，全部通过：
+- `test_register_success` — 注册成功 201
+- `test_register_duplicate_username` — 同用户名二次注册 409
+- `test_login_success` — 注册后登录，断言 200 且响应含 `access_token`
+- `test_login_wrong_password` — 登录密码故意传错，401
+- `test_me_without_token` — 不带 token 访问 `/me`，401
+
+**踩过的坑（真实记录，别再犯）**：
+- 忘记保存文件 → pytest 显示 `collected 0 items` / `no tests ran`。VS Code 里开自动保存（`Ctrl+Shift+P` → `Preferences: Open Settings (UI)` → 搜 `files.autoSave` → 选 `afterDelay`）。
+- 复制代码时缩进错位，函数体掉出函数外，变成模块顶层代码，pytest 收集直接失败。
+- 同名函数重复定义（写了两个 `test_register_success`），Python 会静默用后面的覆盖前面的，前一个测试形同没写。
+- **最容易犯的语义错误**：注册和登录复用同一个 `request_body`，导致"密码错误"用例实际传的是正确密码，断言必然不符。教训：**每次改变了输入条件，就要用新变量名装新数据，不要复用旧字典**。
+
+**用户反馈的最大痛点**：每条需要登录态的用例都要重新走一遍"注册 → 拿 token"，这正是阶段 3 要用 fixture 解决的问题。
 
 ---
 
@@ -156,30 +173,18 @@ app/
 
 ---
 
-## 六、下一步：阶段 2 该做什么
+## 六、下一步：阶段 3 该做什么
 
-目标：**用最笨的方式**跑通第一个测试，亲身体会痛点。
+阶段 2 已完成，5 条用例全通过，`pytest`/`requests` 已装并写入 `requirements.txt`。
 
-要求（刻意保留的"坏味道"，这是设计好的）：
-- 新建 `tests/test_auth.py`
-- 只用 `requests` + `pytest`，不做任何封装
-- URL 直接硬编码 `http://127.0.0.1:8010/api/auth/login`
-- 每个用例内部重新走一遍注册 + 登录拿 token
-- 断言就写 `assert resp.status_code == 200`
+目标：解决阶段 2 暴露出的真实痛点——**每条需要登录态的用例都要重新走一遍"注册 → 登录拿 token"**。
 
-先写 3~5 个用例：注册成功、注册重名、登录成功、登录密码错、`/me` 不带 token。
+要做的事：
+- 新建 `framework/http_client.py`：封装 base_url、超时、统一请求方法
+- `conftest.py` 里写一个 `registered_user` 或 `auth_token` fixture，注册一次、拿到 token 后给多个用例复用
+- 配置外置：把 `http://127.0.0.1:8010` 这个 base_url 挪到 `config.yaml` 或环境变量，不要散落在每个测试文件里
 
-写完之后你会明显感觉到烦：URL 重复、登录代码重复、测试数据重复。
-**记下你觉得烦的地方**，那份清单就是阶段 3 的需求文档。
-
-需要新装的依赖（阶段 2 开始才需要）：
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install pytest requests
-```
-
-装完记得把它们加进 `requirements.txt`（或者更规范一点，拆一个
-`requirements-dev.txt` 专门放测试依赖——这个取舍可以到时候讨论）。
+改造完之后，`tests/test_auth.py` 里那些重复的注册代码应该能删掉大半，回头对比一下阶段 2 和阶段 3 的代码量/可读性差异，这是面试时最好讲的一段成长故事。
 
 ---
 
