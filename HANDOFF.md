@@ -1,6 +1,6 @@
 # 交接文档 — pytest-api-automation
 
-> 最后更新：2026-08-05
+> 最后更新：2026-08-07
 > 换机器后，把这份文档从头读一遍即可无缝接上。
 
 ---
@@ -24,8 +24,8 @@
 |---|---|---|---|
 | 1 | FastAPI 被测服务（靶子） | AI | 已完成 |
 | 2 | 裸写第一个测试（故意写丑，体会痛点） | **你** | 已完成 |
-| 3 | 封装 HTTP 客户端 + conftest fixture + 多环境配置 | **你** | 待开始 |
-| 4 | 数据驱动（parametrize）+ 响应结构校验 + faker 造数 | **你** | 未开始 |
+| 3 | 封装 HTTP 客户端 + conftest fixture + 多环境配置 | **你** | 已完成 |
+| 4 | 数据驱动（parametrize）+ 响应结构校验 + faker 造数 | **你** | 进行中（见下方"当前进度"） |
 | 5 | Allure 报告 + GitHub Actions CI | **你** | 未开始 |
 | 6 | README（含架构图和设计决策说明） | **你** | 未开始 |
 
@@ -173,18 +173,93 @@ app/
 
 ---
 
-## 六、下一步：阶段 3 该做什么
+## 六、当前进度（阶段 4，2026-08-07）
 
-阶段 2 已完成，5 条用例全通过，`pytest`/`requests` 已装并写入 `requirements.txt`。
+### 已完成并验证通过的内容
 
-目标：解决阶段 2 暴露出的真实痛点——**每条需要登录态的用例都要重新走一遍"注册 → 登录拿 token"**。
+`tests/test_auth.py`（8 条用例全过）：
+- `test_register_success` 用 `@pytest.mark.parametrize` 对 username 长度做边界值测试
+  (2/3/20/21 位 → 422/201/201/422)，直接对应 `app/schemas.py` 的 `min_length=3, max_length=20`
+- `test_register_duplicate_username`、`test_login_success`、`test_login_wrong_password`、
+  `test_me_without_token` 复用 `conftest.py` 里的 `base_url` / `registered_user` fixture
+- `test_login_success` 用 `jsonschema` 的 `TOKEN_SCHEMA` 校验响应结构，
+  不再是简单的 `"access_token" in response.json()`
 
-要做的事：
-- 新建 `framework/http_client.py`：封装 base_url、超时、统一请求方法
-- `conftest.py` 里写一个 `registered_user` 或 `auth_token` fixture，注册一次、拿到 token 后给多个用例复用
-- 配置外置：把 `http://127.0.0.1:8010` 这个 base_url 挪到 `config.yaml` 或环境变量，不要散落在每个测试文件里
+`conftest.py` 里已有：
+- `base_url` fixture（读环境变量 `API_BASE_URL`，读不到用默认值 `127.0.0.1:8010`）
+- `registered_user` fixture（注册一个新用户，返回 username/password）
+- `TOKEN_SCHEMA`（jsonschema 格式的登录响应结构定义）
 
-改造完之后，`tests/test_auth.py` 里那些重复的注册代码应该能删掉大半，回头对比一下阶段 2 和阶段 3 的代码量/可读性差异，这是面试时最好讲的一段成长故事。
+已装并写入 `requirements.txt` 的测试依赖：`pytest`、`requests`、`jsonschema`、`Faker`。
+
+### 当前卡在哪一步（下次打开电脑先做这个）
+
+**`tests/test_products.py` 和 `tests/test_order.py` 都还是空文件，一行代码都没写。**
+
+上一轮我讲了思路和一个示例代码块，但你还没有动手落地。这是下次继续时的起点：
+
+**任务：给 `POST /api/products` 写第一条测试（`test_create_product_success`）**
+
+需要覆盖三件新东西：
+1. 这个接口需要登录（看 `app/routers/products.py` 里 `_: User = Depends(get_current_user)`），
+   所以测试里要先拿 `registered_user`，再调 `/api/auth/login` 换成 token
+2. 带 token 的请求要在 `headers` 里加 `{"Authorization": f"Bearer {token}"}`——
+   这是你项目里第一次真正用到鉴权请求头，之前的接口都不需要登录
+3. 商品的 `name`/`price`/`stock` 用 `faker` 生成（`fake.word()`、`fake.pyfloat(...)`、
+   `fake.random_int(...)`），不要手写固定值，理由和阶段 2 教训一致：固定值多次运行容易冲突或显得不真实
+
+示例骨架（可以直接抄这个开始改）：
+
+```python
+import requests
+from faker import Faker
+
+fake = Faker()
+
+
+def test_create_product_success(base_url, registered_user):
+    login_response = requests.post(
+        base_url + "/api/auth/login",
+        json=registered_user,
+        timeout=5,
+    )
+    token = login_response.json()["access_token"]
+
+    product_body = {
+        "name": fake.word(),
+        "price": fake.pyfloat(min_value=1, max_value=1000, right_digits=2),
+        "stock": fake.random_int(min=1, max=100),
+    }
+
+    response = requests.post(
+        base_url + "/api/products",
+        json=product_body,
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=5,
+    )
+    assert response.status_code == 201, response.text
+```
+
+写完跑：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/test_products.py -v
+```
+
+跑通之后，下一步是把"登录拿 token"这个动作也抽成一个 fixture（跟 `registered_user` 一样的思路），
+因为商品/订单模块几乎每条用例都需要 token,重复写"注册 → 登录 → 取 token"会跟阶段 2 一样烦。
+这个 fixture 还没讨论具体怎么设计，属于下一步要一起想的内容。
+
+### 阶段 4 剩余的完整范围（做完 test_products 第一条后继续往下推）
+
+参考 `HANDOFF.md` 第五节"服务里刻意埋好的测试点"和 `app/routers/orders.py` 的业务逻辑，
+阶段 4 完整要覆盖的场景大致是：
+
+- 商品：创建成功 / 价格非法(≤0) / 无 token / 分页参数边界(page=0, size=101)
+- 订单：下单成功 / 库存不足 / 余额不足 / 商品不存在 / quantity 非法 / 状态机非法流转(pay 两次/cancel 已支付)
+- 订单副作用：取消订单后断言库存和余额真的回滚（这是 `HANDOFF.md` 里反复强调的"最有价值的一类"用例）
+
+这部分具体怎么拆分成测试用例、要不要每个场景都写，等你做完第一条 product 测试后再继续讨论。
 
 ---
 
