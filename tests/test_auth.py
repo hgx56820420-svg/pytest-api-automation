@@ -1,12 +1,17 @@
 import uuid
-
+import pytest
 import requests
+from conftest import TOKEN_SCHEMA
+from jsonschema import validate
 
-
-
-
-def test_register_success(base_url):
-    username = f"user_{uuid.uuid4().hex[:8]}"
+@pytest.mark.parametrize("username_length,expected_status", [
+    (2, 422),
+    (3, 201),
+    (20, 201),
+    (21, 422),
+])
+def test_register_success(base_url,username_length,expected_status):
+    username =  f"u{uuid.uuid4().hex}"[:username_length]
     request_body = {
         "username": username,
         "password": "Test123456",
@@ -18,7 +23,7 @@ def test_register_success(base_url):
         timeout=5,
     )
 
-    assert response.status_code == 201, response.text
+    assert response.status_code == expected_status, response.text
 
 def test_register_duplicate_username(base_url):
     username = f"user_{uuid.uuid4().hex[:8]}"
@@ -51,7 +56,8 @@ def test_login_success(base_url,registered_user):
     )
  
     assert response.status_code == 200, response.text
-    assert "access_token" in response.json(), response.text
+    validate(instance=response.json(), schema=TOKEN_SCHEMA)
+ 
 
 def test_login_wrong_password(base_url,registered_user):
     wrong_login_body={

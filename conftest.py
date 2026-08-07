@@ -2,6 +2,7 @@ import pytest
 import uuid
 import requests
 import os
+from jsonschema import validate
 
 BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8010")
 
@@ -22,3 +23,12 @@ def registered_user(base_url):
     assert response.status_code == 201, response.text
 
     return {"username": username, "password": password}
+
+TOKEN_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "access_token": {"type": "string"},
+        "token_type": {"type": "string"},
+    },
+    "required": ["access_token", "token_type"],
+}
