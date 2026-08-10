@@ -32,3 +32,13 @@ TOKEN_SCHEMA = {
     },
     "required": ["access_token", "token_type"],
 }
+
+@pytest.fixture
+def auth_token(base_url, registered_user):
+    response = requests.post(
+        base_url + "/api/auth/login",
+        json=registered_user,
+        timeout=5,
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["access_token"]
