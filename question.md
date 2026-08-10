@@ -157,6 +157,42 @@ validate(instance=response.json(), schema=SCHEMA)
 
 - 把 `TOKEN_SCHEMA` 里 `access_token` 的类型故意改成 `integer`，跑测试，确认真的报出 `ValidationError`，并且报错信息精确指出实际值是那串 JWT 字符串——证明这份 schema 真的在起校验作用，不是摆设代码
 
+### 补充：商品/订单模块阶段（阶段 4 后半段）
+
+**新增知识点**：
+
+- **`auth_token` 和 `auth_headers` 两个 fixture 的区别**：
+  `auth_token` 返回 token 字符串（用于测试要自己改造 token 的场景，比如故意传错 token）；
+  `auth_headers` 返回完整的 `{"Authorization": "Bearer xxx"}` 字典，直接交给 `requests` 的 `headers=` 参数就行。
+  封装层次：`base_url → registered_user → auth_token → auth_headers → created_product`。
+
+- **fixture 命名要用名词不用动词**：`create_product`（动词，读起来像"创建商品这个动作"）改成 `created_product`（名词，表达"一个已经创建好的商品"）。
+  fixture 是"提供数据/资源"的，不是"执行动作"的，命名要反映这点。
+
+- **`created_product` fixture 用固定值（price=10、stock=5）而不是 faker**：
+  副作用测试断言要基于具体数值算账（下单 2 个扣 20、库存减 2），固定值让断言好写。
+  **判断标准**：断言需要精确数值时用固定值，断言只关心"成功/拒绝"时用 faker。
+
+- **`requests.get` 的 query 参数用 `params=` 而不是手拼字符串**：
+  `requests.get(url, params={"page": 0, "size": 10})` 会自动拼成 `?page=0&size=10`，
+  比 `url + "?page=0&size=10"` 更不容易出错（特殊字符转义问题）。
+
+- **副作用断言的正确做法**：不是只断言"取消接口返回 200"，
+  而是重新调用商品详情和 `/me` 接口，看它们的返回值——库存和余额是不是真的恢复了。
+  这是阶段 1 `HANDOFF.md` 反复强调的"分水岭"用例。
+
+**新增踩过的坑**：
+
+| 现象 | 原因 | 教训 |
+|---|---|---|
+| `test_create_product_invalid_price` 传 `fake.word()` 当 price | 类型错了，fake.word() 返回字符串，会先触发类型校验 422，轮不到"价格 ≤ 0"这条规则 | 测"数值非法"时要传类型对、数值不对的值（比如 `0`），不要传类型错的值 |
+| 同一条用例 URL 拼成 `/api/products/0` | 把 price 和路径参数搞混了，price 在 body 里，不在 URL 里 | URL 的路径参数（`{id}`）和请求体字段是两个完全不同的位置 |
+| 断言 `== 400`，实际返回 422 | Pydantic 的 `Field(gt=0)` 是字段级校验，返回 422；400 才是业务规则校验（库存不足等） | 阶段 4 username 长度踩过一次的同知识点，再次应用 |
+| 订单测试里 `requests.post("/api/auth/me")` 用错方法 | `/me` 是 GET 接口，用 POST 会被服务端拒绝 405 | HTTP 方法要严格对照路由定义，不能凭感觉选 |
+| 订单测试里 `order_id = requests.post(...)` 然后拼进 URL | `requests.post` 返回 Response 对象，不是订单 id；要从响应体里取：`response.json()["id"]` | Response 对象 vs 响应体里的字段是两回事，变量命名要表达"是什么"，不要把 Response 当成数值用 |
+| 断言 `final_stock == initial_stock` 报 `<Response [200]> == 5` | 提取了 `final_stock_value` 但断言还在用 `final_stock` 这个 Response 对象 | 变量改名/新增后，所有引用点都要同步；这种错误靠读报错信息就能定位 |
+| 文件顶部被编辑器自动加进了 `from turtle import reset`、`from statistics import quantiles`、`from app.routers.orders import cancel_order` | 编辑器自动补全误触 | 定期清理 import；测试**不应该**直接 import 被测服务的内部代码，这会让测试和服务代码耦合 |
+
 ---
 
 ## 通用方法论（贯穿几个阶段反复出现的原则）
