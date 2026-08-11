@@ -56,3 +56,17 @@ def test_cancel_order_restores_stock_and_balance(base_url, auth_headers, created
     # 6. 断言：副作用真的回滚了（库存和余额都恢复到下单前的值）
     assert final_stock == initial_stock, f"stock not restored: {final_stock} != {initial_stock}"
     assert final_balance == initial_balance, f"balance not restored: {final_balance} != {initial_balance}"
+
+def test_create_order_success(base_url,auth_headers,created_product):
+    # 下单（quantity=2，总价 = 10.0 * 2 = 20.0）
+    order_response = requests.post(
+        base_url + "/api/orders",
+        headers=auth_headers,
+        json={"product_id": created_product["id"], "quantity": 2},
+        timeout=5,
+    )
+    assert order_response.status_code == 201, order_response.text
+    order_data = order_response.json()
+    assert order_data["status"] == "created"
+    assert order_data["amount"] == 20.0
+    assert order_data["product_id"] == created_product["id"]
