@@ -15,6 +15,7 @@ completed:
   - Cross-user order access test returning 404
   - Local Allure report generation and browser opening
   - GitHub Actions workflow for API tests and Allure artifacts
+  - GitHub Actions deployment of Allure HTML report to GitHub Pages
 
 verified:
   - command: .venv/Scripts/python.exe -m pytest tests/ -v
@@ -24,8 +25,8 @@ verified:
 blockers: []
 
 next_task:
-  recommended: Push the CI workflow and inspect the first GitHub Actions run
-  first_step: Confirm the workflow passes on main and the allure-results artifact is downloadable
+  recommended: Inspect the GitHub Pages deployment and record the report URL
+  first_step: Confirm the deploy-report job succeeds after GitHub enables Pages for the repository
 
 later:
   - Decide whether framework/http_client.py is needed or should be removed
