@@ -1,0 +1,38 @@
+updated_at: 2026-08-18
+project: pytest-api-automation
+stage: 4
+stage_status: in_progress
+branch: main
+working_tree: dirty
+working_tree_note: Existing changes in tests/test_order.py and 交接文档.md, plus untracked framework/ and 提示词.md were present when this context was created.
+
+completed:
+  - FastAPI service and authentication tests
+  - Product endpoint tests
+  - Order creation success and validation tests
+  - Order cancellation rollback test for stock and balance
+  - Payment/cancellation state transition tests
+
+verified:
+  - command: .venv/Scripts/python.exe -m pytest tests/ -v
+    result: blocked_by_existing_syntax_error_in_tests/test_order.py_line_211
+  - service_url: http://127.0.0.1:8010
+
+blockers:
+  - tests/test_order.py has an empty function body after a definition around line 210; fix or complete that learner change before relying on the full suite.
+
+next_task:
+  recommended: Add cross-user order access test
+  scenario: User A creates an order; User B requests it with User B token
+  expected: 404 and detail equals Order not found
+
+later:
+  - Decide whether framework/http_client.py is needed or should be removed
+  - Complete remaining order state-machine coverage
+  - Add Allure reporting and GitHub Actions CI
+  - Write README with architecture and design decisions
+
+constraints:
+  - Test code is written by the learner unless explicitly requested otherwise
+  - Do not modify app/ merely to make tests pass
+  - Use PowerShell-compatible commands and port 8010
