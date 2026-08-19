@@ -4,7 +4,7 @@ stage: 4
 stage_status: in_progress
 branch: main
 working_tree: dirty
-working_tree_note: Existing changes in tests/test_order.py and 交接文档.md, plus untracked framework/ and 提示词.md were present when this context was created.
+working_tree_note: Cleanup removed obsolete handoff prompts, empty framework/, local shop.db, and test/Python caches. Existing changes in tests/test_order.py and 交接文档.md remain uncommitted.
 
 completed:
   - FastAPI service and authentication tests
