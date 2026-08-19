@@ -1,7 +1,7 @@
 updated_at: 2026-08-19
 project: pytest-api-automation
 stage: 5
-stage_status: in_progress
+stage_status: completed
 branch: main
 working_tree: dirty
 working_tree_note: Cleanup removed obsolete handoff prompts, empty framework/, local shop.db, and test/Python caches. Existing changes in tests/test_order.py and 交接文档.md remain uncommitted.
@@ -25,8 +25,12 @@ verified:
 blockers: []
 
 next_task:
-  recommended: Inspect the GitHub Pages deployment and record the report URL
-  first_step: Confirm the deploy-report job succeeds after GitHub enables Pages for the repository
+  recommended: Prepare portfolio README and interview walkthrough
+  first_step: Add a concise README with architecture, test coverage, local commands, CI badge, and GitHub Pages report link
+
+published_report:
+  url: https://hgx56820420-svg.github.io/pytest-api-automation/
+  verified: 2026-08-19
 
 later:
   - Decide whether framework/http_client.py is needed or should be removed

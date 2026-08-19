@@ -201,3 +201,64 @@ validate(instance=response.json(), schema=SCHEMA)
 2. **测试要能重复执行，不依赖上一次运行留下的状态**——固定值的测试数据一跑就"用过一次"，第二次跑就会跟历史数据冲突。所有需要唯一性的字段都要动态生成。
 3. **用了封装（fixture）之后要清楚它已经做了什么，不要重复做**——这是阶段 3 反复出现的坑，本质是对抽象层的信任和理解不够。
 4. **报错信息要读完整，它通常已经把根因写出来了**——`AssertionError` 里带的 `response.text`、jsonschema 的 `Failed validating 'type' in schema[...]` 都是直接给出诊断线索的，不用瞎猜。
+
+---
+
+## 阶段 4 补充：订单权限隔离
+
+### 为什么越权测试在一个函数内完成
+
+用户 A 创建订单、用户 B 注册登录并查询该订单，是同一个连续业务场景；B 的请求依赖 A
+刚创建出来的真实 `order_id`，因此不应拆成两次独立执行。测试函数本身可以单独运行：
+
+```powershell
+.venv\Scripts\python.exe -m pytest tests/test_order.py::test_user_cannot_access_another_users_order -v
+```
+
+### 注册和登录的 fixture 链路
+
+`base_url -> registered_user -> auth_token -> auth_headers -> created_product`。
+
+- `registered_user` 注册随机用户并返回用户名、密码。
+- `auth_token` 用该用户登录，返回 token 字符串。
+- `auth_headers` 把 token 包装为 `Authorization: Bearer <token>`，供 `requests` 使用。
+
+越权测试需要第二个身份，所以用户 A 使用现成 `auth_headers`，用户 B 要单独注册、登录并构造
+`headers_b`。否则仍会以 A 的身份请求，测试无法验证权限隔离。
+
+### `TODO`、UUID 和 Authorization 的含义
+
+- `TODO` 只是待办注释，不会被 Python 执行；完成实现后应删除，避免误导读者。
+- `f"user_{uuid.uuid4().hex[:8]}"`：UUID 生成随机标识，`hex` 去掉连字符，`[:8]` 取前八位；
+  最终得到类似 `user_a13f82c4` 的可重复运行测试用户名。
+- `{"Authorization": f"Bearer {token_b}"}` 是用户 B 的认证请求头。服务端从中识别当前用户，
+  才能判断 B 无权读取 A 的订单并返回 404。
+
+---
+
+## 阶段 5：Allure 与 CI/CD
+
+### Allure 的组成
+
+- `allure-pytest`：pytest 插件，提供 `--alluredir`，把测试执行结果写入 `allure-results`。
+- `allure-commandline`：把原始结果生成 HTML 报告。
+- Java：Allure 命令行运行时依赖。
+
+只安装命令行工具时，pytest 会报 `unrecognized arguments: --alluredir`；原因是缺少
+`allure-pytest`，不是 pytest 本身不支持该参数。
+
+### 为什么本地会出现 JAVA_HOME 报错
+
+`JAVA_HOME` 和 `PATH` 是当前终端进程的环境变量；在一个 PowerShell 中临时设置后，打开新终端
+不会自动保留。项目的 `scripts/run_allure.ps1` 会自动定位项目内 Java 或系统 Java，重新生成报告
+并用本地 HTTP 服务打开，避免直接双击 HTML 或手动配置 Java：
+
+```powershell
+.\scripts\run_allure.ps1
+```
+
+### GitHub Actions 与 Pages
+
+工作流先启动 API、运行 pytest 并保存 `allure-results`；测试成功后再生成 HTML 并部署到
+GitHub Pages。Pages artifact 必须在每个工作流运行中使用唯一名称，否则对旧 run 点击多次
+`Re-run` 会产生同名 artifact，部署会报 `Multiple artifacts named github-pages`。
