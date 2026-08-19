@@ -1,0 +1,53 @@
+name: API tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Start API service
+        run: |
+          nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8010 > uvicorn.log 2>&1 &
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8010/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat uvicorn.log
+          exit 1
+
+      - name: Run tests and collect Allure results
+        run: python -m pytest tests/ -v --alluredir allure-results
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results
+          path: |
+            allure-results/
+            uvicorn.log
+          if-no-files-found: warn

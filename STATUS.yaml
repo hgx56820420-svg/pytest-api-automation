@@ -14,6 +14,7 @@ completed:
   - Payment/cancellation state transition tests
   - Cross-user order access test returning 404
   - Local Allure report generation and browser opening
+  - GitHub Actions workflow for API tests and Allure artifacts
 
 verified:
   - command: .venv/Scripts/python.exe -m pytest tests/ -v
@@ -23,8 +24,8 @@ verified:
 blockers: []
 
 next_task:
-  recommended: Add GitHub Actions CI workflow
-  first_step: Run the test suite and generate an Allure artifact in GitHub Actions
+  recommended: Push the CI workflow and inspect the first GitHub Actions run
+  first_step: Confirm the workflow passes on main and the allure-results artifact is downloadable
 
 later:
   - Decide whether framework/http_client.py is needed or should be removed
