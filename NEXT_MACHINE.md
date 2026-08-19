@@ -48,20 +48,8 @@ node_modules\.bin\allure.cmd --version
 脚本会为当前 PowerShell 进程设置项目内 Java、重新生成 `allure-results` 和
 `allure-report`，再用本地 HTTP 服务打开报告。不要直接双击 `allure-report/index.html`。
 
-## 让 AI 接手
-
-把下面这段作为新会话第一条消息：
-
-```text
-这是 pytest-api-automation 学习项目。请先读取 AGENTS.md、STATUS.yaml、PROJECT.md，
-然后执行 git status --short，并用 2-3 句话总结真实当前状态。
-测试代码默认由我本人编写；你负责讲原理、拆任务、review 和验证，不要直接代写完整测试。
-被测服务在 app/，默认不要修改。当前任务以 STATUS.yaml 的 next_task 为准，完成小步后运行 pytest。
-环境是 Windows PowerShell，服务端口 8010，测试使用 .venv\Scripts\python.exe。
-```
-
 ## 接手原则
 
 - `STATUS.yaml` 是当前状态的首要来源，但要用 Git 和测试命令复核。
-- `交接文档.md`、`HANDOFF.md`、`question.md` 是历史和教学资料，不保证全部代表当前状态。
+- `question.md` 是已提交的学习记录；本地 `archive/` 中的材料仅作历史参考，不保证代表当前状态。
 - 每次阶段性完成后更新 `STATUS.yaml` 的日期、任务和验证结果，再单独提交。
