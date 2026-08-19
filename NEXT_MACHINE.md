@@ -29,6 +29,9 @@ python -m venv .venv
 npm install
 ```
 
+`requirements.txt` 已包含 `allure-pytest`，所以 Python 依赖安装完成后，pytest 就能识别
+`--alluredir` 参数。
+
 如果系统没有 Java，可安装 JDK 21。安装后验证：
 
 ```powershell
