@@ -1,6 +1,6 @@
-updated_at: 2026-08-18
+updated_at: 2026-08-19
 project: pytest-api-automation
-stage: 4
+stage: 5
 stage_status: in_progress
 branch: main
 working_tree: dirty
@@ -12,19 +12,19 @@ completed:
   - Order creation success and validation tests
   - Order cancellation rollback test for stock and balance
   - Payment/cancellation state transition tests
+  - Cross-user order access test returning 404
+  - Local Allure report generation and browser opening
 
 verified:
   - command: .venv/Scripts/python.exe -m pytest tests/ -v
-    result: blocked_by_existing_syntax_error_in_tests/test_order.py_line_211
+    result: 24 passed
   - service_url: http://127.0.0.1:8010
 
-blockers:
-  - tests/test_order.py has an empty function body after a definition around line 210; fix or complete that learner change before relying on the full suite.
+blockers: []
 
 next_task:
-  recommended: Add cross-user order access test
-  scenario: User A creates an order; User B requests it with User B token
-  expected: 404 and detail equals Order not found
+  recommended: Add GitHub Actions CI workflow
+  first_step: Run the test suite and generate an Allure artifact in GitHub Actions
 
 later:
   - Decide whether framework/http_client.py is needed or should be removed

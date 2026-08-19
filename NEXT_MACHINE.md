@@ -42,9 +42,11 @@ node_modules\.bin\allure.cmd --version
 生成并打开报告：
 
 ```powershell
-.venv\Scripts\python.exe -m pytest tests/ --alluredir allure-results
-node_modules\.bin\allure.cmd serve allure-results
+.\scripts\run_allure.ps1
 ```
+
+脚本会为当前 PowerShell 进程设置项目内 Java、重新生成 `allure-results` 和
+`allure-report`，再用本地 HTTP 服务打开报告。不要直接双击 `allure-report/index.html`。
 
 ## 让 AI 接手
 
