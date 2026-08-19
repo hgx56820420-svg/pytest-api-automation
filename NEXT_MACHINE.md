@@ -21,6 +21,28 @@ python -m venv .venv
 .venv\Scripts\python.exe -m pytest tests/ -v
 ```
 
+## Allure 报告
+
+项目使用 Node.js 安装 Allure 命令行工具；Allure 还需要 Java 21 或更高版本：
+
+```powershell
+npm install
+```
+
+如果系统没有 Java，可安装 JDK 21。安装后验证：
+
+```powershell
+java -version
+node_modules\.bin\allure.cmd --version
+```
+
+生成并打开报告：
+
+```powershell
+.venv\Scripts\python.exe -m pytest tests/ --alluredir allure-results
+node_modules\.bin\allure.cmd serve allure-results
+```
+
 ## 让 AI 接手
 
 把下面这段作为新会话第一条消息：

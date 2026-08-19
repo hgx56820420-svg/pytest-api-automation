@@ -4,6 +4,8 @@ __pycache__/
 .venv/
 venv/
 *.egg-info/
+node_modules/
+.tools/
 
 # 本地数据库（每次跑测试都会重建，不该进版本库）
 *.db
