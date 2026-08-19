@@ -5,15 +5,21 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $java = Get-ChildItem -Path (Join-Path $projectRoot ".tools") -Filter java.exe -Recurse -ErrorAction SilentlyContinue |
     Select-Object -First 1
 
-if ($null -eq $java) {
-    $java = Get-Command java.exe -ErrorAction SilentlyContinue
+$javaHome = $null
+if ($null -ne $java) {
+    $javaHome = Split-Path -Parent (Split-Path -Parent $java.FullName)
+} else {
+    $systemJava = Get-Command java.exe -ErrorAction SilentlyContinue
+    if ($null -ne $systemJava) {
+        $javaHome = Split-Path -Parent (Split-Path -Parent $systemJava.Source)
+    }
 }
 
-if ($null -eq $java) {
+if ([string]::IsNullOrWhiteSpace($javaHome)) {
     throw "Java was not found. Install Java 21 or place a JRE under .tools before running this script."
 }
 
-$env:JAVA_HOME = Split-Path -Parent (Split-Path -Parent $java.Source)
+$env:JAVA_HOME = $javaHome
 $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
 
 $python = Join-Path $projectRoot ".venv\Scripts\python.exe"
