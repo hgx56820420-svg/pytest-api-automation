@@ -1,0 +1,13 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# 默认对 CI 里同款的 API_BASE_URL 生效；docker run 时可用 -e 覆盖
+ENV API_BASE_URL=http://api:8010
+
+CMD ["pytest", "tests/", "-v"]
