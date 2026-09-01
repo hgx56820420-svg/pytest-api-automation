@@ -18,6 +18,7 @@ archive/
 .pytest_cache/
 allure-results/
 allure-report/
+artifacts/
 report.html
 .coverage
 htmlcov/
