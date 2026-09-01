@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Order, Product, User
+from app.models import CartItem, Coupon, InventoryTransaction, Order, Product, User
 from app.schemas import OrderCreateRequest, OrderListResponse, OrderResponse
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
@@ -48,6 +48,12 @@ def create_order(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Insufficient stock")
 
     amount = round(product.price * payload.quantity, 2)
+    coupon = None
+    if payload.coupon_code:
+        coupon = db.scalar(select(Coupon).where(Coupon.code == payload.coupon_code, Coupon.status == "active"))
+        if coupon is None or coupon.used_count >= coupon.max_uses:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid or exhausted coupon")
+        amount = round(amount * (1 - coupon.discount_percent / 100), 2)
     if current_user.balance < amount:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Insufficient balance")
 
@@ -59,8 +65,17 @@ def create_order(
         product_id=product.id,
         quantity=payload.quantity,
         amount=amount,
+        coupon_code=coupon.code if coupon else None,
     )
     db.add(order)
+    db.add(InventoryTransaction(product_id=product.id, quantity_change=-payload.quantity, reason="order_created"))
+    if coupon:
+        coupon.used_count += 1
+        if coupon.used_count >= coupon.max_uses:
+            coupon.status = "exhausted"
+    cart_item = db.scalar(select(CartItem).where(CartItem.user_id == current_user.id, CartItem.product_id == product.id))
+    if cart_item:
+        db.delete(cart_item)
     db.commit()
     db.refresh(order)
     return order
@@ -135,6 +150,12 @@ def cancel_order(
     product = db.get(Product, order.product_id)
     if product is not None:
         product.stock += order.quantity
+        db.add(InventoryTransaction(product_id=product.id, quantity_change=order.quantity, reason="order_cancelled", reference_id=order.id))
+    if order.coupon_code:
+        coupon = db.scalar(select(Coupon).where(Coupon.code == order.coupon_code))
+        if coupon:
+            coupon.used_count = max(0, coupon.used_count - 1)
+            coupon.status = "active"
     current_user.balance = round(current_user.balance + order.amount, 2)
     order.status = "cancelled"
 

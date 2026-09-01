@@ -27,6 +27,14 @@ SCENARIOS: dict[str, tuple[str, str, list[str], list[str]]] = {
     "get_order_api_orders__order_id__get": ("get_order", "contract", ["http_status", "order_matches"], ["http"]),
     "pay_order_api_orders__order_id__pay_post": ("pay_order", "business", ["http_status", "order_status_paid"], ["http", "database"]),
     "cancel_order_api_orders__order_id__cancel_post": ("cancel_order", "business", ["http_status", "order_status_cancelled", "inventory_restored", "balance_restored"], ["http", "database"]),
+    "get_cart_api_cart_get": ("get_cart", "business", ["http_status", "cart_user_isolation"], ["http", "database"]),
+    "clear_cart_api_cart_delete": ("clear_cart", "business", ["http_status", "cart_cleared"], ["http", "database"]),
+    "add_cart_item_api_cart_items_post": ("add_cart_item", "business", ["http_status", "cart_item_added", "stock_limit"], ["http", "database"]),
+    "update_cart_item_api_cart_items__product_id__put": ("update_cart_item", "business", ["http_status", "cart_quantity_updated"], ["http", "database"]),
+    "remove_cart_item_api_cart_items__product_id__delete": ("remove_cart_item", "business", ["http_status", "cart_item_removed"], ["http", "database"]),
+    "list_coupons_api_coupons_get": ("list_coupons", "contract", ["http_status", "response_schema"], ["http"]),
+    "create_coupon_api_coupons_post": ("create_coupon", "business", ["http_status", "coupon_created"], ["http", "database"]),
+    "transactions_api_inventory__product_id__transactions_get": ("inventory_transactions", "business", ["http_status", "inventory_evidence"], ["http", "database"]),
 }
 
 EXTRA_CASES = [

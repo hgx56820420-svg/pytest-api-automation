@@ -77,6 +77,7 @@ class ProductListResponse(BaseModel):
 class OrderCreateRequest(BaseModel):
     product_id: int
     quantity: int = Field(gt=0, le=100)
+    coupon_code: str | None = Field(default=None, min_length=1, max_length=40)
 
 
 class OrderResponse(BaseModel):
@@ -87,6 +88,7 @@ class OrderResponse(BaseModel):
     product_id: int
     quantity: int
     amount: float
+    coupon_code: str | None = None
     status: str
     created_at: datetime
 
@@ -96,3 +98,46 @@ class OrderListResponse(BaseModel):
     page: int
     size: int
     items: list[OrderResponse]
+
+
+class CartItemRequest(BaseModel):
+    product_id: int
+    quantity: int = Field(gt=0, le=100)
+
+
+class CartItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    product_id: int
+    quantity: int
+    product: ProductResponse
+
+
+class CartResponse(BaseModel):
+    items: list[CartItemResponse]
+
+
+class CouponCreateRequest(BaseModel):
+    code: str = Field(min_length=3, max_length=40, pattern="^[A-Z0-9_-]+$")
+    discount_percent: float = Field(gt=0, le=100)
+    max_uses: int = Field(gt=0, le=100000)
+
+
+class CouponResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    code: str
+    discount_percent: float
+    max_uses: int
+    used_count: int
+    status: str
+
+
+class InventoryTransactionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    product_id: int
+    quantity_change: int
+    reason: str
+    reference_id: int | None
+    created_at: datetime

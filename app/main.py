@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.database import init_db
-from app.routers import auth, orders, products
+from app.routers import auth, cart, coupons, inventory, orders, products
 
 
 @asynccontextmanager
@@ -32,6 +32,9 @@ app = FastAPI(
 app.include_router(auth.router)
 app.include_router(products.router)
 app.include_router(orders.router)
+app.include_router(cart.router)
+app.include_router(coupons.router)
+app.include_router(inventory.router)
 
 
 @app.get("/health", tags=["meta"])

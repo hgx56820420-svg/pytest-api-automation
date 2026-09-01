@@ -19,8 +19,8 @@ def test_current_openapi_has_full_v1_case_coverage():
     cases = plan_cases(normalized)
     coverage = review_coverage(normalized, cases)
 
-    assert len(normalized.operations) == 14
-    assert len(cases.cases) == 30
+    assert len(normalized.operations) == 22
+    assert len(cases.cases) == 38
     assert coverage.decision == "approved"
     assert coverage.operations_covered == coverage.operations_total
 

@@ -10,7 +10,7 @@ ORM（Object-Relational Mapping，对象关系映射）：让你用写 Python �
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -104,6 +104,7 @@ class Order(Base):
     # 之所以要单独存一份，而不是每次现算：即使以后商品改价了，
     # 历史订单显示的金额也应该是"当时买的价格"，不会被联动改变。
     amount: Mapped[float] = mapped_column(Float)
+    coupon_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
     # 订单状态机，只有三种取值，只能沿一个方向流转：
     #   created（已创建，默认值）
@@ -120,3 +121,37 @@ class Order(Base):
     # 这里没写 back_populates，因为 Product 类没有反向声明
     # "一个商品对应哪些订单"这个字段——目前业务不需要从商品反查订单列表。
     product: Mapped["Product"] = relationship()
+
+
+class CartItem(Base):
+    __tablename__ = "cart_items"
+    __table_args__ = (UniqueConstraint("user_id", "product_id", name="uq_cart_user_product"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
+    quantity: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
+    product: Mapped["Product"] = relationship()
+
+
+class Coupon(Base):
+    __tablename__ = "coupons"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    discount_percent: Mapped[float] = mapped_column(Float)
+    max_uses: Mapped[int] = mapped_column(Integer, default=1)
+    used_count: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class InventoryTransaction(Base):
+    __tablename__ = "inventory_transactions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
+    quantity_change: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(40))
+    reference_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

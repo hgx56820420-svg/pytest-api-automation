@@ -27,7 +27,9 @@ Mini Shop 是一个用于 API 自动化测试验证的最小商城后端，提�
 - 订单相关库存和用户余额管理；
 - 服务存活检查。
 
-当前版本不包含购物车、优惠券、真实支付渠道、配送、退款、管理员角色和多租户能力。
+当前版本不包含真实支付渠道、配送、退款、管理员角色和多租户能力。
+
+当前 V2 新增购物车、优惠券和库存流水：购物车按用户隔离；优惠券在订单中按百分比折扣并记录使用次数；库存流水记录下单扣减和取消恢复，供自动化 Agent 做数据库证据校验。
 
 ## 3. 术语
 
@@ -601,3 +603,23 @@ order.status = cancelled
 - Token 撤销、issuer、audience 和 refresh token。
 
 这些限制不应被测试报告误写为已验证能力。
+
+## 13. V2 购物车、优惠券和库存流水接口
+
+#### REQ-CART-001 `GET /api/cart` 查询当前用户购物车
+
+#### REQ-CART-002 `DELETE /api/cart` 清空当前用户购物车
+
+#### REQ-CART-003 `POST /api/cart/items` 添加购物车商品
+
+#### REQ-CART-004 `PUT /api/cart/items/{product_id}` 修改购物车数量
+
+#### REQ-CART-005 `DELETE /api/cart/items/{product_id}` 删除购物车商品
+
+#### REQ-COUPON-001 `GET /api/coupons` 查询可用优惠券
+
+#### REQ-COUPON-002 `POST /api/coupons` 创建优惠券
+
+#### REQ-INVENTORY-001 `GET /api/inventory/{product_id}/transactions` 查询库存变更流水
+
+V2 验收要求：购物车必须按用户隔离，数量不能超过库存；优惠券不能重复超额使用，订单金额和余额扣减必须使用折后金额；下单和取消必须分别产生负向和正向库存流水。
