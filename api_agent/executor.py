@@ -104,6 +104,12 @@ class ScenarioExecutor:
     def _create_order(self, headers: dict[str, str], product_id: int, quantity: int = 2) -> requests.Response:
         return self._request("POST", "/api/orders", headers=headers, json_body={"product_id": product_id, "quantity": quantity})
 
+    def _create_coupon(self, headers: dict[str, str], *, code: str | None = None, discount_percent: float = 10, max_uses: int = 2) -> dict[str, Any]:
+        code = code or f"SAVE_{uuid.uuid4().hex[:8].upper()}"
+        response = self._request("POST", "/api/coupons", headers=headers, json_body={"code": code, "discount_percent": discount_percent, "max_uses": max_uses})
+        response.raise_for_status()
+        return response.json()
+
     def _check_http(self, case: TestCase, response: requests.Response, assertions: list[AssertionResult]) -> None:
         self._assert(assertions, "http_status", response.status_code in case.expected_status_codes, case.expected_status_codes, response.status_code)
         operation = self.operations.get(case.operation_id)
@@ -379,6 +385,95 @@ class ScenarioExecutor:
         self._check_http(case, response, assertions)
         self._assert(assertions, "order_hidden", response.status_code == 404, 404, response.status_code)
         return _request_view("GET", f"/api/orders/{created.json()['id']}", {}), _response_view(response), {}, {}
+
+    def _cart_setup(self):
+        user, headers = self._register_and_auth()
+        product = self._create_product(headers, stock=10)
+        return user, headers, product
+
+    def _scenario_get_cart(self, case, assertions):
+        user, headers, product = self._cart_setup()
+        self._request("POST", "/api/cart/items", headers=headers, json_body={"product_id": product["id"], "quantity": 2}).raise_for_status()
+        before = {"cart_items": self.db.cart_items(user["id"])}
+        response = self._request("GET", "/api/cart", headers=headers)
+        self._check_http(case, response, assertions)
+        after = {"cart_items": self.db.cart_items(user["id"])}
+        items = response.json().get("items", []) if response.ok else []
+        self._assert(assertions, "cart_user_isolation", len(items) == 1 and items[0].get("product_id") == product["id"], product["id"], items)
+        return _request_view("GET", "/api/cart", {}), _response_view(response), before, after
+
+    def _scenario_add_cart_item(self, case, assertions):
+        user, headers, product = self._cart_setup()
+        before = {"cart_items": self.db.cart_items(user["id"])}
+        body = {"product_id": product["id"], "quantity": 2}
+        response = self._request("POST", "/api/cart/items", headers=headers, json_body=body)
+        self._check_http(case, response, assertions)
+        after = {"cart_items": self.db.cart_items(user["id"])}
+        self._assert(assertions, "cart_item_added", len(after["cart_items"]) == 1 and after["cart_items"][0]["quantity"] == 2, 2, after["cart_items"])
+        self._assert(assertions, "stock_limit", after["cart_items"][0]["quantity"] <= self.db.product(product["id"])["stock"], True, after["cart_items"][0]["quantity"] <= self.db.product(product["id"])["stock"])
+        return _request_view("POST", "/api/cart/items", {"json_body": body}), _response_view(response), before, after
+
+    def _scenario_update_cart_item(self, case, assertions):
+        user, headers, product = self._cart_setup()
+        self._request("POST", "/api/cart/items", headers=headers, json_body={"product_id": product["id"], "quantity": 1}).raise_for_status()
+        before = {"cart_items": self.db.cart_items(user["id"])}
+        body = {"product_id": product["id"], "quantity": 3}
+        response = self._request("PUT", f"/api/cart/items/{product['id']}", headers=headers, json_body=body)
+        self._check_http(case, response, assertions)
+        after = {"cart_items": self.db.cart_items(user["id"])}
+        self._assert(assertions, "cart_quantity_updated", after["cart_items"][0]["quantity"] == 3, 3, after["cart_items"])
+        return _request_view("PUT", f"/api/cart/items/{product['id']}", {"json_body": body}), _response_view(response), before, after
+
+    def _scenario_remove_cart_item(self, case, assertions):
+        user, headers, product = self._cart_setup()
+        self._request("POST", "/api/cart/items", headers=headers, json_body={"product_id": product["id"], "quantity": 1}).raise_for_status()
+        before = {"cart_items": self.db.cart_items(user["id"])}
+        response = self._request("DELETE", f"/api/cart/items/{product['id']}", headers=headers)
+        self._check_http(case, response, assertions)
+        after = {"cart_items": self.db.cart_items(user["id"])}
+        self._assert(assertions, "cart_item_removed", not after["cart_items"], [], after["cart_items"])
+        return _request_view("DELETE", f"/api/cart/items/{product['id']}", {}), _response_view(response), before, after
+
+    def _scenario_clear_cart(self, case, assertions):
+        user, headers, product = self._cart_setup()
+        self._request("POST", "/api/cart/items", headers=headers, json_body={"product_id": product["id"], "quantity": 1}).raise_for_status()
+        before = {"cart_items": self.db.cart_items(user["id"])}
+        response = self._request("DELETE", "/api/cart", headers=headers)
+        self._check_http(case, response, assertions)
+        after = {"cart_items": self.db.cart_items(user["id"])}
+        self._assert(assertions, "cart_cleared", not after["cart_items"], [], after["cart_items"])
+        return _request_view("DELETE", "/api/cart", {}), _response_view(response), before, after
+
+    def _scenario_create_coupon(self, case, assertions):
+        user, headers = self._register_and_auth()
+        code = f"SAVE_{uuid.uuid4().hex[:8].upper()}"
+        before = {"coupon": self.db.coupon(code)}
+        body = {"code": code, "discount_percent": 10, "max_uses": 2}
+        response = self._request("POST", "/api/coupons", headers=headers, json_body=body)
+        self._check_http(case, response, assertions)
+        after = {"coupon": self.db.coupon(code)}
+        self._assert(assertions, "coupon_created", bool(after["coupon"]) and after["coupon"]["code"] == code, code, after["coupon"])
+        return _request_view("POST", "/api/coupons", {"json_body": body}), _response_view(response), before, after
+
+    def _scenario_list_coupons(self, case, assertions):
+        _, headers = self._register_and_auth()
+        self._create_coupon(headers)
+        return self._simple(case, assertions, "GET", "/api/coupons", headers=headers)
+
+    def _scenario_inventory_transactions(self, case, assertions):
+        user, headers, product = self._order_setup(stock=10)
+        before = {"inventory_transactions": self.db.inventory_transactions(product["id"]), "product": self.db.product(product["id"])}
+        created = self._create_order(headers, product["id"], 2)
+        created.raise_for_status()
+        order_id = created.json()["id"]
+        cancelled = self._request("POST", f"/api/orders/{order_id}/cancel", headers=headers)
+        cancelled.raise_for_status()
+        response = self._request("GET", f"/api/inventory/{product['id']}/transactions", headers=headers)
+        self._check_http(case, response, assertions)
+        after = {"inventory_transactions": self.db.inventory_transactions(product["id"]), "product": self.db.product(product["id"])}
+        entries = after["inventory_transactions"]
+        self._assert(assertions, "inventory_evidence", len(entries) >= 2 and entries[-2]["quantity_change"] == -2 and entries[-1]["quantity_change"] == 2, "-2 then +2", entries)
+        return _request_view("GET", f"/api/inventory/{product['id']}/transactions", {}), _response_view(response), before, after
 
     def _table_count(self, table: str) -> int:
         if table != "products":

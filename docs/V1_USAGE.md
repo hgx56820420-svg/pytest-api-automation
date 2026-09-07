@@ -1,6 +1,6 @@
 # V1 使用说明
 
-V1 使用确定性 Python 工具跑通以下闭环。当前 Mini Shop 会生成 30 条场景用例，覆盖 14 个 OpenAPI operation，以及成功、失败、边界和隔离场景：
+V1 使用确定性 Python 工具跑通以下闭环。当前 Mini Shop V2 会生成 38 条场景用例，覆盖 22 个 OpenAPI operation，以及成功、失败、边界、隔离、购物车、优惠券和库存流水场景：
 
 ```text
 OpenAPI -> 规范化需求 JSON -> 用例 JSON -> 覆盖审核 -> pytest

@@ -29,6 +29,31 @@ class DatabaseObserver:
         with self._engine.connect() as connection:
             return int(connection.execute(text("SELECT COUNT(*) FROM orders")).scalar_one())
 
+    def cart_items(self, user_id: int) -> list[dict[str, Any]]:
+        return self._many(
+            "SELECT id, user_id, product_id, quantity FROM cart_items WHERE user_id = :id ORDER BY id",
+            user_id,
+        )
+
+    def coupon(self, code: str) -> dict[str, Any]:
+        with self._engine.connect() as connection:
+            row = connection.execute(
+                text("SELECT id, code, discount_percent, max_uses, used_count, status FROM coupons WHERE code = :code"),
+                {"code": code},
+            ).mappings().one_or_none()
+        return dict(row) if row else {}
+
+    def inventory_transactions(self, product_id: int) -> list[dict[str, Any]]:
+        return self._many(
+            "SELECT id, product_id, quantity_change, reason, reference_id FROM inventory_transactions WHERE product_id = :id ORDER BY id",
+            product_id,
+        )
+
+    def _many(self, statement: str, identity: int) -> list[dict[str, Any]]:
+        with self._engine.connect() as connection:
+            rows = connection.execute(text(statement), {"id": identity}).mappings().all()
+        return [dict(row) for row in rows]
+
     def _one(self, statement: str, identity: int) -> dict[str, Any]:
         with self._engine.connect() as connection:
             row = connection.execute(text(statement), {"id": identity}).mappings().one_or_none()
@@ -36,4 +61,3 @@ class DatabaseObserver:
 
     def close(self) -> None:
         self._engine.dispose()
-
