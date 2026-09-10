@@ -21,6 +21,8 @@ from api_agent.database import DatabaseObserver
 from api_agent.executor import ScenarioExecutor
 from api_agent.library_executor import LibraryExecutor
 from api_agent.library_observer import LibraryObserver
+from api_agent.meeting_executor import MeetingExecutor
+from api_agent.meeting_observer import MeetingObserver
 from api_agent.models import TestCase
 
 
@@ -202,6 +204,76 @@ LIBRARY_EXTRA_CASES = [
     ),
 ]
 
+# ---------------------------------------------------------------------------
+# meeting adapter (third tested service: time-conflict business rules)
+# ---------------------------------------------------------------------------
+
+MEETING_SCENARIOS: dict[str, tuple[str, str, list[str], list[str]]] = {
+    "health_health_get": ("health_check", "contract", ["http_status", "response_schema"], ["http"]),
+    "register_api_auth_register_post": ("register", "contract", ["http_status", "response_schema"], ["http"]),
+    "login_api_auth_login_post": ("login", "security", ["http_status", "token_present"], ["http"]),
+    "me_api_auth_me_get": ("current_user", "security", ["http_status", "authenticated_user"], ["http"]),
+    "list_rooms_api_rooms_get": ("list_rooms", "contract", ["http_status", "response_schema"], ["http"]),
+    "create_room_api_rooms_post": ("create_room", "business", ["http_status", "room_created", "room_count_increased"], ["http", "database"]),
+    "get_room_api_rooms__room_id__get": ("get_room", "contract", ["http_status", "response_schema"], ["http"]),
+    "update_room_api_rooms__room_id__put": ("update_room", "business", ["http_status", "room_updated"], ["http", "database"]),
+    "disable_room_api_rooms__room_id__delete": ("disable_room", "business", ["http_status", "room_disabled"], ["http", "database"]),
+    "create_booking_api_bookings_post": ("create_booking", "business", ["http_status", "booking_created", "balance_decreased", "booking_amount_matches"], ["http", "database"]),
+    "list_bookings_api_bookings_get": ("list_bookings", "contract", ["http_status", "booking_in_list"], ["http"]),
+    "cancel_booking_api_bookings__booking_id__cancel_post": ("cancel_booking", "business", ["http_status", "booking_status_cancelled", "balance_restored"], ["http", "database"]),
+}
+
+MEETING_EXTRA_CASES = [
+    TestCase(
+        case_id="auth.register.boundaries", operation_id="register_api_auth_register_post", title="注册用户名边界", category="negative", scenario="register_boundaries", source_refs=["knowledge:review-coverage-script-001"], expected_status_codes=[201, 422], required_assertions=["boundary_statuses", "invalid_not_created"], evidence_requirements=["http", "database"],
+    ),
+    TestCase(
+        case_id="auth.register.duplicate.rejected", operation_id="register_api_auth_register_post", title="重复用户名被拒绝", category="negative", scenario="duplicate_register", source_refs=["knowledge:review-coverage-script-001"], expected_status_codes=[409], required_assertions=["http_status", "duplicate_not_created"], evidence_requirements=["http", "database"],
+    ),
+    TestCase(
+        case_id="auth.login.wrong_password.rejected", operation_id="login_api_auth_login_post", title="错误密码登录被拒绝", category="negative", scenario="wrong_password", source_refs=["knowledge:review-coverage-script-001"], expected_status_codes=[401], required_assertions=["http_status", "error_detail"], evidence_requirements=["http"],
+    ),
+    TestCase(
+        case_id="auth.me.missing_token.rejected", operation_id="me_api_auth_me_get", title="未携带 Token 访问用户信息", category="negative", scenario="missing_token", source_refs=["knowledge:review-coverage-script-001"], expected_status_codes=[401], required_assertions=["http_status", "error_detail"], evidence_requirements=["http"],
+    ),
+    TestCase(
+        case_id="rooms.create.missing_token.rejected", operation_id="create_room_api_rooms_post", title="未认证不能创建会议室", category="negative", scenario="create_room_missing_token", source_refs=["knowledge:review-coverage-script-001"], expected_status_codes=[401], required_assertions=["http_status", "room_not_created"], evidence_requirements=["http", "database"],
+    ),
+    TestCase(
+        case_id="rooms.get.not_found", operation_id="get_room_api_rooms__room_id__get", title="查询不存在会议室", category="negative", scenario="get_room_not_found", source_refs=["knowledge:review-coverage-script-001"], expected_status_codes=[404], required_assertions=["http_status", "error_detail"], evidence_requirements=["http"],
+    ),
+    TestCase(
+        case_id="rooms.list.invalid_pagination", operation_id="list_rooms_api_rooms_get", title="会议室分页约束非法", category="negative", scenario="list_rooms_invalid_pagination", source_refs=["knowledge:review-coverage-script-001"], expected_status_codes=[422], required_assertions=["pagination_boundaries"], evidence_requirements=["http"],
+    ),
+    TestCase(
+        case_id="bookings.create.room_not_found", operation_id="create_booking_api_bookings_post", title="会议室不存在时不能预约", category="negative", scenario="booking_room_not_found", source_refs=["knowledge:business-order-invariants-001"], expected_status_codes=[404], required_assertions=["http_status", "booking_not_created"], evidence_requirements=["http", "database"],
+    ),
+    TestCase(
+        case_id="bookings.create.disabled_room.rejected", operation_id="create_booking_api_bookings_post", title="停用会议室不能预约", category="negative", scenario="booking_disabled_room", source_refs=["knowledge:business-order-invariants-001"], expected_status_codes=[400], required_assertions=["http_status", "balance_unchanged", "booking_not_created"], evidence_requirements=["http", "database"],
+    ),
+    TestCase(
+        case_id="bookings.create.time_conflict.rejected", operation_id="create_booking_api_bookings_post", title="时间重叠的预约被拒绝", category="negative", scenario="booking_time_conflict", source_refs=["knowledge:business-order-invariants-001"], expected_status_codes=[409], required_assertions=["http_status", "balance_unchanged", "booking_not_created"], evidence_requirements=["http", "database"],
+    ),
+    TestCase(
+        case_id="bookings.create.adjacent_slot.allowed", operation_id="create_booking_api_bookings_post", title="相邻时段预约成功", category="business", scenario="booking_adjacent_slot_allowed", source_refs=["knowledge:business-order-invariants-001"], expected_status_codes=[201], required_assertions=["http_status", "booking_created", "balance_decreased", "booking_amount_matches"], evidence_requirements=["http", "database"],
+    ),
+    TestCase(
+        case_id="bookings.create.invalid_time_range", operation_id="create_booking_api_bookings_post", title="结束时间早于开始时间被拒绝", category="negative", scenario="booking_invalid_time_range", source_refs=["knowledge:business-order-invariants-001"], expected_status_codes=[422], required_assertions=["http_status", "booking_not_created"], evidence_requirements=["http", "database"],
+    ),
+    TestCase(
+        case_id="bookings.create.insufficient_balance.no_side_effect", operation_id="create_booking_api_bookings_post", title="预存余额不够时不得产生副作用", category="negative", scenario="booking_insufficient_balance", source_refs=["knowledge:business-order-invariants-001"], expected_status_codes=[400], required_assertions=["http_status", "balance_unchanged", "booking_not_created"], evidence_requirements=["http", "database"],
+    ),
+    TestCase(
+        case_id="bookings.create.missing_token.rejected", operation_id="create_booking_api_bookings_post", title="未认证不能预约", category="negative", scenario="booking_missing_token", source_refs=["knowledge:review-coverage-script-001"], expected_status_codes=[401], required_assertions=["http_status", "balance_unchanged", "booking_not_created"], evidence_requirements=["http", "database"],
+    ),
+    TestCase(
+        case_id="bookings.cancel.twice.rejected", operation_id="cancel_booking_api_bookings__booking_id__cancel_post", title="已取消预约不能重复取消", category="negative", scenario="cancel_twice", source_refs=["knowledge:business-order-invariants-001"], expected_status_codes=[409], required_assertions=["http_status", "state_unchanged"], evidence_requirements=["http", "database"],
+    ),
+    TestCase(
+        case_id="bookings.cancel.other_user.hidden", operation_id="cancel_booking_api_bookings__booking_id__cancel_post", title="不能取消他人预约", category="security", scenario="cancel_other_user", source_refs=["knowledge:review-coverage-script-001"], expected_status_codes=[404], required_assertions=["http_status", "booking_hidden", "state_unchanged"], evidence_requirements=["http", "database"],
+    ),
+]
+
 MINI_SHOP_ADAPTER = DomainAdapter(
     name="mini_shop",
     scenarios=MINI_SHOP_SCENARIOS,
@@ -225,9 +297,21 @@ LIBRARY_ADAPTER = DomainAdapter(
     ],
 )
 
+MEETING_ADAPTER = DomainAdapter(
+    name="meeting",
+    scenarios=MEETING_SCENARIOS,
+    extra_cases=MEETING_EXTRA_CASES,
+    executor_class=MeetingExecutor,
+    observer_class=MeetingObserver,
+    blanket_auth=[
+        ("所有预约接口均需要认证", "/api/bookings"),
+    ],
+)
+
 ADAPTERS: dict[str, DomainAdapter] = {
     MINI_SHOP_ADAPTER.name: MINI_SHOP_ADAPTER,
     LIBRARY_ADAPTER.name: LIBRARY_ADAPTER,
+    MEETING_ADAPTER.name: MEETING_ADAPTER,
 }
 
 DEFAULT_ADAPTER = "mini_shop"

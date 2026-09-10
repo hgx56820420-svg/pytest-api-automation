@@ -102,6 +102,7 @@ V2 通过 adapter 把"业务适配层"从框架中分离，一个 adapter 绑定
 |---|---|---|---|
 | `mini_shop`（默认） | `app/` Mini Shop API | `python -m uvicorn app.main:app --port 8010` | 8010 |
 | `library` | `services/library/` Library API | `$env:LIB_DATABASE_URL=...; python -m uvicorn services.library.main:app --port 8020` | 8020 |
+| `meeting` | `services/meeting/` Meeting Room API | `$env:MEETING_DATABASE_URL=...; python -m uvicorn services.meeting.main:app --port 8030` | 8030 |
 
 每个 adapter 注册四样东西（见 `api_agent/adapters.py`）：operation 场景映射、负面用例模板、场景执行器类、数据库观察者类，以及需求解析用的通配认证规则。
 
@@ -120,7 +121,11 @@ python -m api_agent v2 `
   --adapter library
 ```
 
-接入新被测服务的步骤：新增 `DomainAdapter`（场景映射 + 用例模板 + Executor/Observer 子类）→ 编写 `docs/<领域>_API_REQUIREMENTS.md`（`#### REQ-XX-001` 标题格式）→ 以 `--adapter <name>` 运行。框架层（工作流、审核、修复、证据链）零改动。
+接入新被测服务的步骤：新增 `DomainAdapter`（场景映射 + 用例模板 + Executor/Observer 子类）→ 编写 `docs/<领域>_API_REQUIREMENTS.md`（`#### REQ-XX-001` 标题格式）→ 以 `--adapter <name>` 运行。框架层（工作流、审核、修复、证据链）零改动。已有三个领域的验证经验：
+
+- `mini_shop`：数量/余额副作用（库存、余额扣减与恢复）
+- `library`：副本/押金副作用 + 借阅状态机（borrowed → returned）
+- `meeting`：时间窗冲突规则（重叠 409、相邻时段放行）+ 金额快照
 
 ## 6. V2 安全边界
 
