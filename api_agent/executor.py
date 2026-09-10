@@ -10,6 +10,7 @@ from typing import Any, Callable
 import requests
 from jsonschema import ValidationError, validate
 
+from api_agent.agentlog import AgentLogger
 from api_agent.artifacts import write_model
 from api_agent.database import DatabaseObserver
 from api_agent.models import AssertionResult, CaseEvidence, NormalizedRequirement, TestCase
@@ -32,6 +33,8 @@ class ScenarioExecutor:
         self.run_id = run_id
         self.operations = {item.operation_id: item for item in requirement.operations}
         self.session = requests.Session()
+        self.logger = AgentLogger(evidence_dir / "agent-log.jsonl", run_id)
+        self._last_request_id = ""
 
     def close(self) -> None:
         self.session.close()
@@ -62,6 +65,7 @@ class ScenarioExecutor:
             case_id=case.case_id,
             operation_id=case.operation_id,
             status=status,
+            request_id=self._last_request_id,
             request=request_evidence,
             response=response_evidence,
             database_before=before,
@@ -69,6 +73,13 @@ class ScenarioExecutor:
             assertions=assertions,
             started_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             duration_ms=round((time.perf_counter() - started) * 1000),
+        )
+        self.logger.log(
+            "case_evidence",
+            case_id=case.case_id,
+            operation_id=case.operation_id,
+            request_id=self._last_request_id,
+            detail={"status": status, "duration_ms": evidence.duration_ms, "assertions": len(assertions)},
         )
         write_model(self.evidence_dir / f"{_safe_name(case.case_id)}.json", evidence)
         return evidence
@@ -82,8 +93,15 @@ class ScenarioExecutor:
         json_body: dict[str, Any] | None = None,
         params: dict[str, Any] | None = None,
     ) -> requests.Response:
-        safe_headers = {**(headers or {}), "X-Request-ID": f"{self.run_id}-{uuid.uuid4().hex[:8]}"}
-        return self.session.request(method, self.base_url + path, headers=safe_headers, json=json_body, params=params, timeout=5)
+        self._last_request_id = f"{self.run_id}-{uuid.uuid4().hex[:8]}"
+        safe_headers = {**(headers or {}), "X-Request-ID": self._last_request_id}
+        response = self.session.request(method, self.base_url + path, headers=safe_headers, json=json_body, params=params, timeout=5)
+        self.logger.log(
+            "http_request",
+            request_id=self._last_request_id,
+            detail={"method": method, "path": path, "status_code": response.status_code},
+        )
+        return response
 
     def _register_and_auth(self) -> tuple[dict[str, Any], dict[str, str]]:
         credentials = {"username": f"agent_{uuid.uuid4().hex[:12]}", "password": "Test123456"}

@@ -71,6 +71,7 @@ def run(
     base_url: str,
     database_url: str,
     runtime_openapi: str | None = None,
+    run_id: str | None = None,
 ) -> tuple[ExecutionReport, int]:
     requirement = read_model(output_dir / "normalized-requirement.json", NormalizedRequirement)
     cases = read_model(output_dir / "test-cases.json", TestCaseDocument)
@@ -79,7 +80,7 @@ def run(
     contract = check_contract(output_dir, runtime_openapi or f"{base_url.rstrip('/')}/openapi.json")
     if coverage.decision != "approved" or script_review.decision != "approved" or contract.decision == "stop":
         report = build_execution_report(
-            run_id=f"run-{uuid.uuid4().hex[:12]}",
+            run_id=run_id or f"run-{uuid.uuid4().hex[:12]}",
             base_url=base_url,
             requirement_hash=requirement.source_hash,
             contract=contract,
@@ -89,7 +90,7 @@ def run(
         write_model(output_dir / "execution-report.json", report)
         return report, 3
 
-    run_id = f"run-{uuid.uuid4().hex[:12]}"
+    run_id = run_id or f"run-{uuid.uuid4().hex[:12]}"
     evidence_dir = output_dir / "evidence" / run_id
     allure_results = output_dir / "allure-results"
     if allure_results.exists():
