@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from api_agent.adapters import create_executor
 from api_agent.artifacts import read_model
-from api_agent.executor import ScenarioExecutor
 from api_agent.models import NormalizedRequirement, TestCaseDocument
 
 try:
@@ -32,7 +32,8 @@ CASES = read_model(CASES_PATH, TestCaseDocument).cases
 
 @pytest.fixture(scope="session")
 def scenario_executor():
-    executor = ScenarioExecutor(
+    executor = create_executor(
+        os.environ.get("API_AGENT_ADAPTER", "mini_shop"),
         base_url=os.environ["API_AGENT_BASE_URL"],
         database_url=os.environ["API_AGENT_DATABASE_URL"],
         evidence_dir=Path(os.environ["API_AGENT_EVIDENCE_DIR"]),
@@ -83,8 +84,8 @@ def review_generated_script(path: Path, cases: TestCaseDocument) -> ScriptReview
         issues.append(f"Forbidden imports: {', '.join(found)}")
     if found := sorted(calls & forbidden_calls):
         issues.append(f"Forbidden calls: {', '.join(found)}")
-    if "ScenarioExecutor" not in source:
-        issues.append("Generated script does not use the controlled ScenarioExecutor")
+    if "create_executor" not in source:
+        issues.append("Generated script does not use the adapter executor factory")
     if "pytest.mark.parametrize" not in source:
         issues.append("Generated script does not map test-cases.json to pytest")
 

@@ -23,6 +23,7 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+from api_agent.adapters import get_adapter
 from api_agent.agentlog import AgentLogger
 from api_agent.artifacts import read_model, write_json, write_model
 from api_agent.contract import compare_contracts
@@ -88,6 +89,7 @@ class V2Workflow:
         database_url: str,
         runtime_openapi: str | None = None,
         max_repair_attempts: int = 2,
+        adapter: str = "mini_shop",
         run_id: str,
     ):
         self.output_dir = output_dir
@@ -96,6 +98,7 @@ class V2Workflow:
         self.base_url = base_url
         self.database_url = database_url
         self.runtime_openapi = runtime_openapi or f"{base_url.rstrip('/')}/openapi.json"
+        self.adapter = adapter
         self.run_id = run_id
         self.repair = RepairManager(output_dir, max_repair_attempts)
         self.logger = AgentLogger(output_dir / "evidence" / run_id / "agent-log.jsonl", run_id)
@@ -271,7 +274,9 @@ class V2Workflow:
         document = load_openapi(self.openapi_source)
         requirement = normalize_openapi(document, self.openapi_source)
         write_model(self.output_dir / "normalized-requirement.json", requirement)
-        parsed = parse_requirements(self.requirements_md)
+        parsed = parse_requirements(
+            self.requirements_md, blanket_auth=get_adapter(self.adapter).blanket_auth
+        )
         write_model(self.output_dir / "parsed-requirement.json", parsed)
         detail = (
             f"{len(parsed.interfaces)} interfaces from requirements, "
@@ -331,7 +336,7 @@ class V2Workflow:
         """Case Design Agent: plan the standard case JSON from the baseline."""
         requirement = read_model(self.output_dir / "normalized-requirement.json", NormalizedRequirement)
         requirement_review = read_model(self.output_dir / "requirement-review.json", RequirementReview)
-        cases = plan_cases(requirement, requirement_review)
+        cases = plan_cases(requirement, requirement_review, self.adapter)
         write_model(self.output_dir / "test-cases.json", cases)
         update = self._trace(state, "case_designer", "done", "review_coverage", f"{len(cases.cases)} cases")
         update.update(
@@ -350,7 +355,7 @@ class V2Workflow:
         requirement = read_model(self.output_dir / "normalized-requirement.json", NormalizedRequirement)
         cases = read_model(self.output_dir / "test-cases.json", TestCaseDocument)
         requirement_review = read_model(self.output_dir / "requirement-review.json", RequirementReview)
-        coverage = review_coverage(requirement, cases, requirement_review)
+        coverage = review_coverage(requirement, cases, requirement_review, self.adapter)
         write_model(self.output_dir / "coverage-report.json", coverage)
         approved = coverage.decision == "approved"
         update = self._message(
@@ -495,7 +500,7 @@ class V2Workflow:
             if case.operation_id not in affected_operations
             and case.operation_id in runtime_operation_ids
         ]
-        replanned = plan_cases(runtime)
+        replanned = plan_cases(runtime, None, self.adapter)
         regenerated = [
             case for case in replanned.cases if case.operation_id in affected_operations
         ]
@@ -539,6 +544,7 @@ class V2Workflow:
             self.database_url,
             self.runtime_openapi,
             run_id=self.run_id,
+            adapter_name=self.adapter,
         )
         summary = (
             f"returncode={returncode}, passed={report.summary.passed}, "

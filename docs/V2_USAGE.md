@@ -94,13 +94,41 @@ artifacts/v2/
 
 生成脚本把每条用例证据 JSON 作为 Allure 附件；`.\scripts\run_allure.ps1` 照常生成报告。
 
-## 5. V2 安全边界
+## 5. 多被测对象（adapter 机制）
+
+V2 通过 adapter 把"业务适配层"从框架中分离，一个 adapter 绑定一个被测服务：
+
+| Adapter | 被测服务 | 启动方式 | 默认端口 |
+|---|---|---|---|
+| `mini_shop`（默认） | `app/` Mini Shop API | `python -m uvicorn app.main:app --port 8010` | 8010 |
+| `library` | `services/library/` Library API | `$env:LIB_DATABASE_URL=...; python -m uvicorn services.library.main:app --port 8020` | 8020 |
+
+每个 adapter 注册四样东西（见 `api_agent/adapters.py`）：operation 场景映射、负面用例模板、场景执行器类、数据库观察者类，以及需求解析用的通配认证规则。
+
+library 二次验证：
+
+```powershell
+$env:LIB_DATABASE_URL = "sqlite:///./library-v2.db"
+python -m uvicorn services.library.main:app --host 127.0.0.1 --port 8020
+# 另开终端：
+python -m api_agent v2 `
+  --openapi http://127.0.0.1:8020/openapi.json `
+  --requirements-md docs/LIBRARY_API_REQUIREMENTS.md `
+  --base-url http://127.0.0.1:8020 `
+  --database-url sqlite:///./library-v2.db `
+  --output artifacts/library-v2 `
+  --adapter library
+```
+
+接入新被测服务的步骤：新增 `DomainAdapter`（场景映射 + 用例模板 + Executor/Observer 子类）→ 编写 `docs/<领域>_API_REQUIREMENTS.md`（`#### REQ-XX-001` 标题格式）→ 以 `--adapter <name>` 运行。框架层（工作流、审核、修复、证据链）零改动。
+
+## 6. V2 安全边界
 
 - HTTP 目标只允许 `127.0.0.1` 或 `localhost`；DatabaseObserver 只接受显式 SQLite URL。
 - Agent 不执行任意 shell 或 SQL；自动修复不触碰删除、支付、退款等高风险断言。
 - Token、密码、数据库连接串不进入报告或日志（executor 递归脱敏）。
 - 缺少证据时结论为 `INCONCLUSIVE`，不得放宽为 PASS。
 
-## 6. V1 命令兼容
+## 7. V1 命令兼容
 
 V1 的 `generate` / `check` / `run` / `pipeline` 子命令保持不变，行为与 `docs/V1_USAGE.md` 一致。

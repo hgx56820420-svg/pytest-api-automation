@@ -51,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     v2_parser.add_argument("--runtime-openapi")
     v2_parser.add_argument("--output", type=Path, default=Path("artifacts/v2"))
     v2_parser.add_argument("--max-repair-attempts", type=int, default=2)
+    v2_parser.add_argument("--adapter", default="mini_shop", help="Domain adapter: mini_shop or library")
 
     args = parser.parse_args(argv)
     if args.command == "generate":
@@ -87,6 +88,7 @@ def _run_v2(args: argparse.Namespace) -> int:
         database_url=args.database_url,
         runtime_openapi=args.runtime_openapi,
         max_repair_attempts=args.max_repair_attempts,
+        adapter=args.adapter,
         run_id=run_id,
     )
     try:

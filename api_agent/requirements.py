@@ -8,8 +8,9 @@ from pathlib import Path
 from api_agent.models import NormalizedRequirement, RequirementEntry, RequirementReview
 from api_agent.openapi import canonical_hash
 
+# 需求 ID 支持多段前缀（如 REQ-AUTH-001、REQ-LIB-META-001）
 REQUIREMENT_HEADING = re.compile(
-    r"^####\s+(?P<id>REQ-[A-Z]+-\d+)\s+`(?P<method>GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+(?P<path>[^`]+)`(?:\s+(?P<title>.*))?$"
+    r"^####\s+(?P<id>REQ-[A-Z0-9]+(?:-[A-Z0-9]+)*-\d+)\s+`(?P<method>GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+(?P<path>[^`]+)`(?:\s+(?P<title>.*))?$"
 )
 
 BUSINESS_RULE_MARKERS = {

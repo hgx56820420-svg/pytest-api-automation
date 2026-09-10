@@ -20,6 +20,10 @@ LOCAL_TEST_HOSTS = {"127.0.0.1", "localhost"}
 
 
 class ScenarioExecutor:
+    """Mini Shop scenario executor; subclasses swap observer and scenarios."""
+
+    observer_class = DatabaseObserver
+
     def __init__(
         self,
         base_url: str,
@@ -31,8 +35,8 @@ class ScenarioExecutor:
         self.base_url = base_url.rstrip("/")
         parsed = urlsplit(self.base_url)
         if parsed.scheme != "http" or parsed.hostname not in LOCAL_TEST_HOSTS:
-            raise ValueError("V1 runner only permits a local test target (http://127.0.0.1 or http://localhost)")
-        self.db = DatabaseObserver(database_url)
+            raise ValueError("runner only permits a local test target (http://127.0.0.1 or http://localhost)")
+        self.db = self.observer_class(database_url)
         self.evidence_dir = evidence_dir
         self.run_id = run_id
         self.operations = {item.operation_id: item for item in requirement.operations}
@@ -180,7 +184,9 @@ class ScenarioExecutor:
 
     def _scenario_register_boundaries(self, case, assertions):
         responses = []
-        for username in ["ab", f"agent_{uuid.uuid4().hex[:8]}", "u" * 20, "u" * 21]:
+        suffix = uuid.uuid4().hex[:12]
+        # 用户名边界：2 字符拒绝、3–20 合法、21 拒绝；名字必须每次唯一，否则修复重跑会撞 409
+        for username in ["ab", f"agent_{suffix}", "u" * 10 + suffix[:10], "u" * 10 + suffix[:11]]:
             response = self._request("POST", "/api/auth/register", json_body={"username": username, "password": "Test123456"})
             responses.append(response.status_code)
         self._assert(assertions, "boundary_statuses", responses == [422, 201, 201, 422], [422, 201, 201, 422], responses)

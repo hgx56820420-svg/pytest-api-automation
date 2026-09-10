@@ -53,7 +53,7 @@ def _passed_evidence(run_id: str, case, request_id: str) -> CaseEvidence:
 def make_stub_run(*, failing_case_ids: list[str] | None = None):
     """Build a deterministic in-process replacement for pipeline.run."""
 
-    def stub_run(output_dir, base_url, database_url, runtime_openapi=None, run_id=None):
+    def stub_run(output_dir, base_url, database_url, runtime_openapi=None, run_id=None, adapter_name=None):
         """Write full evidence + a PASS/FAIL execution report without HTTP."""
         requirement_model = read_model(output_dir / "normalized-requirement.json", NormalizedRequirement)
         cases = read_model(output_dir / "test-cases.json", TestCaseDocument)

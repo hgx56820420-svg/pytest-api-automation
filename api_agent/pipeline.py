@@ -31,12 +31,13 @@ def generate(
     source: str,
     output_dir: Path,
     requirements_md: Path | None = None,
+    adapter_name: str | None = None,
 ) -> tuple[NormalizedRequirement, TestCaseDocument, CoverageReport, ScriptReviewReport, RequirementReview | None]:
     document = load_openapi(source)
     requirement = normalize_openapi(document, source)
     requirement_review = review_markdown_requirements(requirements_md, requirement) if requirements_md else None
-    cases = plan_cases(requirement, requirement_review)
-    coverage = review_coverage(requirement, cases, requirement_review)
+    cases = plan_cases(requirement, requirement_review, adapter_name)
+    coverage = review_coverage(requirement, cases, requirement_review, adapter_name)
     if requirement_review and requirement_review.decision != "approved":
         coverage.decision = "needs_revision"
         coverage.issues.extend(requirement_review.issues)
@@ -72,6 +73,7 @@ def run(
     database_url: str,
     runtime_openapi: str | None = None,
     run_id: str | None = None,
+    adapter_name: str | None = None,
 ) -> tuple[ExecutionReport, int]:
     requirement = read_model(output_dir / "normalized-requirement.json", NormalizedRequirement)
     cases = read_model(output_dir / "test-cases.json", TestCaseDocument)
@@ -104,6 +106,7 @@ def run(
             "API_AGENT_RUN_ID": run_id,
             "API_AGENT_CASES_PATH": str((output_dir / "test-cases.json").resolve()),
             "API_AGENT_REQUIREMENT_PATH": str((output_dir / "normalized-requirement.json").resolve()),
+            "API_AGENT_ADAPTER": adapter_name or "mini_shop",
         }
     )
     command = [

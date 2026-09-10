@@ -34,9 +34,11 @@ BLANKET_AUTH = [
 ]
 
 
-def parse_requirements(path: Path) -> ParsedRequirement:
+def parse_requirements(path: Path, blanket_auth: list[tuple[str, str]] | None = None) -> ParsedRequirement:
     """Requirement Parser Agent entry: extract interfaces and rules from MD.
 
+    ``blanket_auth`` carries section-level auth rules contributed by the
+    active domain adapter; defaults to the combined known rules.
     Returns a ParsedRequirement with interfaces (auth, expected success
     codes), detected business rules and scenarios, plus parse issues.
     """
@@ -89,7 +91,7 @@ def parse_requirements(path: Path) -> ParsedRequirement:
 
     close_current()
 
-    for marker, prefix in BLANKET_AUTH:
+    for marker, prefix in blanket_auth if blanket_auth is not None else BLANKET_AUTH:
         if marker in text:
             for interface in interfaces:
                 if interface.path.startswith(prefix):
