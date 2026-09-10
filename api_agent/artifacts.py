@@ -30,3 +30,12 @@ def export_schemas(directory: Path, models: list[type[BaseModel]]) -> None:
     for model in models:
         write_json(directory / f"{model.__name__}.schema.json", model.model_json_schema())
 
+
+def safe_name(value: str) -> str:
+    """Filesystem-safe name for artifacts keyed by case ids (shared contract).
+
+    The executor writes evidence files and the result reviewer reads them, so
+    this mapping must stay in one place.
+    """
+    return "".join(character if character.isalnum() or character in "-_" else "_" for character in value)
+

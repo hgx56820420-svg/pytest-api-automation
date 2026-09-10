@@ -38,9 +38,14 @@ def main(argv: list[str] | None = None) -> int:
     pipeline_parser.add_argument("--runtime-openapi")
     pipeline_parser.add_argument("--output", type=Path, default=Path("artifacts/v1"))
 
-    v2_parser = subparsers.add_parser("v2", help="V2 multi-agent workflow: requirements-first with review loops and bounded repair")
-    v2_parser.add_argument("--openapi", required=True, help="OpenAPI contract used as the review baseline")
-    v2_parser.add_argument("--requirements-md", type=Path, required=True, help="Markdown requirement document (primary source)")
+    v2_parser = subparsers.add_parser(
+        "v2",
+        help="V2 multi-agent workflow: requirements-first with review loops",
+    )
+    v2_parser.add_argument("--openapi", required=True, help="OpenAPI contract used as review baseline")
+    v2_parser.add_argument(
+        "--requirements-md", type=Path, required=True, help="Markdown requirement document (primary source)"
+    )
     v2_parser.add_argument("--base-url", required=True)
     v2_parser.add_argument("--database-url", required=True)
     v2_parser.add_argument("--runtime-openapi")
@@ -84,7 +89,19 @@ def _run_v2(args: argparse.Namespace) -> int:
         max_repair_attempts=args.max_repair_attempts,
         run_id=run_id,
     )
-    result = workflow.invoke()
+    try:
+        result = workflow.invoke()
+    except Exception as exc:  # degraded report keeps the audit trail intact
+        workflow.write_error_report(exc)
+        _print(
+            {
+                "run_id": run_id,
+                "decision": "NEEDS_HUMAN",
+                "workflow_report": str(args.output / "workflow-report.json"),
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+        )
+        return 3
     report_path = args.output / "workflow-report.json"
     summary = {
         "run_id": run_id,

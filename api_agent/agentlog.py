@@ -32,6 +32,7 @@ class AgentLogger:
         request_id: str = "",
         detail: Any = None,
     ) -> None:
+        """Append one JSON record with the full correlation id set."""
         record = {
             "ts": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()) + f".{int(time.perf_counter() * 1000) % 1000:03d}Z",
             "level": level,
@@ -47,12 +48,19 @@ class AgentLogger:
             handle.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
 
     def read_all(self) -> list[dict[str, Any]]:
+        """Parse the whole JSONL file; corrupt lines are skipped with a note."""
         if not self.path.exists():
             return []
         records: list[dict[str, Any]] = []
         for line in self.path.read_text(encoding="utf-8").splitlines():
-            if line.strip():
+            if not line.strip():
+                continue
+            try:
                 records.append(json.loads(line))
+            except json.JSONDecodeError:
+                records.append(
+                    {"level": "error", "event": "corrupt_log_line", "run_id": self.run_id, "detail": line[:200]}
+                )
         return records
 
     def requests_for_case(self, case_id: str) -> list[str]:

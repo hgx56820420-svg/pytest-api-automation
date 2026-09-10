@@ -6,14 +6,17 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlsplit
 
 import requests
 from jsonschema import ValidationError, validate
 
 from api_agent.agentlog import AgentLogger
-from api_agent.artifacts import write_model
+from api_agent.artifacts import safe_name, write_model
 from api_agent.database import DatabaseObserver
 from api_agent.models import AssertionResult, CaseEvidence, NormalizedRequirement, TestCase
+
+LOCAL_TEST_HOSTS = {"127.0.0.1", "localhost"}
 
 
 class ScenarioExecutor:
@@ -26,8 +29,9 @@ class ScenarioExecutor:
         requirement: NormalizedRequirement,
     ):
         self.base_url = base_url.rstrip("/")
-        if not self.base_url.startswith(("http://127.0.0.1", "http://localhost")):
-            raise ValueError("V1 runner only permits a local test target")
+        parsed = urlsplit(self.base_url)
+        if parsed.scheme != "http" or parsed.hostname not in LOCAL_TEST_HOSTS:
+            raise ValueError("V1 runner only permits a local test target (http://127.0.0.1 or http://localhost)")
         self.db = DatabaseObserver(database_url)
         self.evidence_dir = evidence_dir
         self.run_id = run_id
@@ -81,7 +85,7 @@ class ScenarioExecutor:
             request_id=self._last_request_id,
             detail={"status": status, "duration_ms": evidence.duration_ms, "assertions": len(assertions)},
         )
-        write_model(self.evidence_dir / f"{_safe_name(case.case_id)}.json", evidence)
+        write_model(self.evidence_dir / f"{safe_name(case.case_id)}.json", evidence)
         return evidence
 
     def _request(
@@ -95,7 +99,14 @@ class ScenarioExecutor:
     ) -> requests.Response:
         self._last_request_id = f"{self.run_id}-{uuid.uuid4().hex[:8]}"
         safe_headers = {**(headers or {}), "X-Request-ID": self._last_request_id}
-        response = self.session.request(method, self.base_url + path, headers=safe_headers, json=json_body, params=params, timeout=5)
+        response = self.session.request(
+            method,
+            self.base_url + path,
+            headers=safe_headers,
+            json=json_body,
+            params=params,
+            timeout=5,
+        )
         self.logger.log(
             "http_request",
             request_id=self._last_request_id,
@@ -510,10 +521,6 @@ class ScenarioExecutor:
     @staticmethod
     def _assert(assertions, name, condition, expected, actual, detail=""):
         assertions.append(AssertionResult(name=name, status="passed" if condition else "failed", expected=expected, actual=actual, detail=detail))
-
-
-def _safe_name(value: str) -> str:
-    return "".join(character if character.isalnum() or character in "-_" else "_" for character in value)
 
 
 def _request_view(method: str, path: str, kwargs: dict[str, Any]) -> dict[str, Any]:

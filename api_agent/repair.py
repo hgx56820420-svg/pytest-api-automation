@@ -39,6 +39,7 @@ class RepairManager:
         after: dict[str, Any],
         affected_case_ids: list[str] | None = None,
     ) -> RepairAction:
+        """Archive one repair attempt with hashes, summaries and a unified diff."""
         action = RepairAction(
             attempt=self.attempts + 1,
             trigger=trigger,
@@ -53,6 +54,7 @@ class RepairManager:
         return action
 
     def escalate(self, reason: str = "") -> None:
+        """Mark the run as needing human review and persist the escalation."""
         self.history.escalated_to_human = True
         self.history.repairs.append(
             RepairAction(

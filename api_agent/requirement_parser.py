@@ -18,6 +18,15 @@ from api_agent.requirements import BUSINESS_RULE_MARKERS, REQUIREMENT_HEADING, S
 SUCCESS_CODE = re.compile(r"成功响应\s*`?(\d{3})`?")
 SECTION_HEADING = re.compile(r"^#{1,3}\s+")
 
+
+def _all_markers(text: str, markers: tuple[str, ...]) -> bool:
+    return all(marker in text for marker in markers)
+
+
+def _has_auth_declaration(body: str) -> bool:
+    return "认证：需要" in body
+
+
 # Section-level blanket rules: text marker -> interfaces whose path starts with prefix.
 BLANKET_AUTH = [
     ("所有订单接口均需要认证", "/api/orders"),
@@ -26,6 +35,11 @@ BLANKET_AUTH = [
 
 
 def parse_requirements(path: Path) -> ParsedRequirement:
+    """Requirement Parser Agent entry: extract interfaces and rules from MD.
+
+    Returns a ParsedRequirement with interfaces (auth, expected success
+    codes), detected business rules and scenarios, plus parse issues.
+    """
     text = path.read_text(encoding="utf-8-sig")
     lines = text.splitlines()
 
@@ -37,13 +51,15 @@ def parse_requirements(path: Path) -> ParsedRequirement:
     current: ParsedInterface | None = None
 
     def close_current() -> None:
+        """Fold the accumulated section body into the open interface."""
         nonlocal current
         if current is None:
             return
         body = "\n".join(section)
-        if "认证：需要" in body:
+        if _has_auth_declaration(body):
             current.auth_required = True
-        current.expected_status_codes = [int(code) for code in SUCCESS_CODE.findall(body)] or [200]
+        codes = [int(code) for code in SUCCESS_CODE.findall(body)]
+        current.expected_status_codes = codes or [200]
         interfaces.append(current)
         current = None
 
@@ -79,8 +95,8 @@ def parse_requirements(path: Path) -> ParsedRequirement:
                 if interface.path.startswith(prefix):
                     interface.auth_required = True
 
-    business_rules = [rule for rule, markers in BUSINESS_RULE_MARKERS.items() if all(marker in text for marker in markers)]
-    scenarios = [scenario for scenario, markers in SCENARIO_MARKERS.items() if all(marker in text for marker in markers)]
+    business_rules = [rule for rule, markers in BUSINESS_RULE_MARKERS.items() if _all_markers(text, markers)]
+    scenarios = [scenario for scenario, markers in SCENARIO_MARKERS.items() if _all_markers(text, markers)]
     missing_rules = sorted(set(BUSINESS_RULE_MARKERS) - set(business_rules))
     if missing_rules:
         warnings.append("Business rules not detected: " + ", ".join(missing_rules))

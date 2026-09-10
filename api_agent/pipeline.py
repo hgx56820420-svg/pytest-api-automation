@@ -117,9 +117,25 @@ def run(
         "--alluredir",
         str(allure_results),
     ]
-    completed = subprocess.run(command, env=environment, text=True, capture_output=True, timeout=180, check=False)
-    (output_dir / "pytest.stdout.log").write_text(completed.stdout, encoding="utf-8")
-    (output_dir / "pytest.stderr.log").write_text(completed.stderr, encoding="utf-8")
+    try:
+        completed = subprocess.run(command, env=environment, text=True, capture_output=True, timeout=180, check=False)
+        (output_dir / "pytest.stdout.log").write_text(completed.stdout, encoding="utf-8")
+        (output_dir / "pytest.stderr.log").write_text(completed.stderr, encoding="utf-8")
+        returncode = completed.returncode
+    except subprocess.TimeoutExpired as exc:
+        # Keep the pipeline auditable: partial evidence stays on disk and the
+        # report degrades to INCONCLUSIVE instead of the exception escaping.
+        (output_dir / "pytest.stdout.log").write_text(_stream_text(exc.stdout), encoding="utf-8")
+        (output_dir / "pytest.stderr.log").write_text(
+            _stream_text(exc.stderr) + f"\npytest timed out after 180s: {exc}", encoding="utf-8"
+        )
+        returncode = 124
     report = build_execution_report(run_id, base_url, requirement.source_hash, contract, cases, evidence_dir)
     write_model(output_dir / "execution-report.json", report)
-    return report, completed.returncode
+    return report, returncode
+
+
+def _stream_text(stream: object) -> str:
+    if isinstance(stream, bytes):
+        return stream.decode("utf-8", errors="replace")
+    return stream if isinstance(stream, str) else ""

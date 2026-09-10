@@ -177,6 +177,8 @@ class ExecutionReport(StrictModel):
 
 
 class CaseVerdict(StrictModel):
+    """Result Review Agent audit verdict for a single case."""
+
     case_id: str
     operation_id: str
     status: Literal["passed", "failed", "inconclusive"]
@@ -186,6 +188,8 @@ class CaseVerdict(StrictModel):
 
 
 class ResultReviewReport(StrictModel):
+    """Outcome of the result review over one execution report."""
+
     schema_version: Literal["2.0"] = "2.0"
     run_id: str
     decision: Literal["approved", "needs_repair", "needs_human"]
@@ -198,6 +202,8 @@ class ResultReviewReport(StrictModel):
 
 
 class RepairAction(StrictModel):
+    """One bounded auto-repair attempt with its archived diff."""
+
     attempt: int
     trigger: str
     target_step: str
@@ -208,6 +214,8 @@ class RepairAction(StrictModel):
 
 
 class RepairHistory(StrictModel):
+    """Bounded repair ledger persisted as repair-history.json."""
+
     schema_version: Literal["2.0"] = "2.0"
     max_repair_attempts: int
     repairs: list[RepairAction] = Field(default_factory=list)
@@ -215,6 +223,8 @@ class RepairHistory(StrictModel):
 
 
 class StepTrace(StrictModel):
+    """One visited workflow node with its decision and routing."""
+
     step: str
     attempt: int
     decision: str
@@ -223,6 +233,8 @@ class StepTrace(StrictModel):
 
 
 class WorkflowRunReport(StrictModel):
+    """Final workflow trace and decision, persisted as workflow-report.json."""
+
     schema_version: Literal["2.0"] = "2.0"
     run_id: str
     started_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
