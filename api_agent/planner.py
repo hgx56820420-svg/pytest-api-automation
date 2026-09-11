@@ -79,11 +79,24 @@ def review_coverage(
             for assertion in ("http_status",)
             if not any(assertion in case.required_assertions for case in cases)
         ]
+        # 审核前置条件：用例声明的场景必须在执行器上有对应实现，
+        # 否则覆盖审核放行后，问题会拖到真实执行阶段才以失败形式暴露。
+        missing_handlers = sorted(
+            {
+                case.scenario
+                for case in cases
+                if not hasattr(adapter.executor_class, f"_scenario_{case.scenario}")
+            }
+        )
+        if missing_handlers:
+            issues.append(
+                f"{operation.operation_id} has no executor scenario handler: {', '.join(missing_handlers)}"
+            )
         items.append(
             CoverageItem(
                 operation_id=operation.operation_id,
                 case_ids=[case.case_id for case in cases],
-                status="covered" if not missing else "missing",
+                status="covered" if not missing and not missing_handlers else "missing",
                 missing_assertions=missing,
             )
         )

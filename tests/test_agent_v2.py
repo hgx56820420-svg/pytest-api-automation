@@ -22,7 +22,7 @@ from api_agent.models import (
     TestCaseDocument,
 )
 from api_agent.openapi import normalize_openapi
-from api_agent.planner import plan_cases
+from api_agent.planner import plan_cases, review_coverage
 from api_agent.repair import RepairManager
 from api_agent.requirement_parser import parse_requirements
 from api_agent.result_review import review_execution_results
@@ -310,6 +310,30 @@ def test_repair_manager_escalation_is_persisted(tmp_path: Path):
 
     assert manager.history.escalated_to_human
     assert manager.history.repairs[-1].trigger == "no progress"
+
+
+def test_coverage_review_rejects_case_without_executor_handler(monkeypatch):
+    """用例声明的场景缺少执行器实现时，覆盖审核必须在执行前拦截。"""
+    from api_agent.adapters import DomainAdapter
+    from api_agent.database import DatabaseObserver
+    from api_agent.executor import ScenarioExecutor
+
+    fake = DomainAdapter(
+        name="fake",
+        scenarios={
+            "health_health_get": ("handler_that_does_not_exist", "contract", ["http_status"], ["http"]),
+        },
+        extra_cases=[],
+        executor_class=ScenarioExecutor,
+        observer_class=DatabaseObserver,
+    )
+    monkeypatch.setattr("api_agent.planner.get_adapter", lambda name=None: fake)
+    mini_shop_requirement = requirement()
+    cases = plan_cases(mini_shop_requirement, None, "fake")
+    coverage = review_coverage(mini_shop_requirement, cases, None, "fake")
+
+    assert coverage.decision == "needs_revision"
+    assert any("no executor scenario handler" in issue for issue in coverage.issues)
 
 
 # ---------------------------------------------------------------------------
