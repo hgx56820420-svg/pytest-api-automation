@@ -53,7 +53,7 @@ def _passed_evidence(run_id: str, case, request_id: str) -> CaseEvidence:
 def make_stub_run(*, failing_case_ids: list[str] | None = None):
     """Build a deterministic in-process replacement for pipeline.run."""
 
-    def stub_run(output_dir, base_url, database_url, runtime_openapi=None, run_id=None, adapter_name=None, fixed_accounts=False):
+    def stub_run(output_dir, base_url, database_url, runtime_openapi=None, run_id=None, adapter_name=None, fixed_accounts=False, rules_path=None):
         """Write full evidence + a PASS/FAIL execution report without HTTP."""
         requirement_model = read_model(output_dir / "normalized-requirement.json", NormalizedRequirement)
         cases = read_model(output_dir / "test-cases.json", TestCaseDocument)
@@ -404,6 +404,7 @@ def test_workflow_passes_end_to_end_with_agent_messages(tmp_path: Path, monkeypa
     assert step_names == [
         "parse_requirement",
         "review_requirement",
+        "analyze_requirements",
         "case_designer",
         "review_coverage",
         "script_generator",
@@ -618,3 +619,132 @@ def test_fixed_mode_username_is_deterministic_and_within_limits(tmp_path: Path):
     assert first == repeat
     assert first != second
     assert len(first) <= 20 and first.startswith("agent_")
+
+
+# ---------------------------------------------------------------------------
+# LLM rule contracts: DSL engine and compilation (no network needed)
+# ---------------------------------------------------------------------------
+
+
+def test_db_assertion_engine_field_delta_and_row_created(tmp_path: Path):
+    from sqlalchemy import create_engine, text
+
+    from api_agent.cleanup import CleanupTool  # noqa: F401
+    from api_agent.database import DatabaseObserver
+    from api_agent.db_assert import DbAssertionEngine
+    from api_agent.llm_rules import LLMDBAssertion
+    from api_agent.models import CleanupSpec  # noqa: F401
+
+    db_path = tmp_path / "dsl.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT, balance REAL)"))
+        connection.execute(text("CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER)"))
+        connection.execute(text("INSERT INTO users (username, balance) VALUES ('agent_a', 1000.0)"))
+    engine.dispose()
+
+    observer = DatabaseObserver(f"sqlite:///{db_path}")
+    observer.allowed_tables = {"users": "id", "orders": "id"}
+    resources = {"user": {"id": 1}}
+    assertions = [
+        LLMDBAssertion(kind="field_delta", table="users", field="balance", key_resource="user", delta=-20.0),
+        LLMDBAssertion(kind="row_created", table="orders"),
+        LLMDBAssertion(kind="row_count_unchanged", table="users"),
+    ]
+    engine_dsl = DbAssertionEngine(assertions, resources, observer)
+    before = engine_dsl.capture_before()
+
+    # 模拟被测服务的副作用：扣款 + 建订单
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE users SET balance = balance - 20.0 WHERE id = 1"))
+        connection.execute(text("INSERT INTO orders (user_id) VALUES (1)"))
+
+    results = engine_dsl.evaluate(before)
+    assert [item.status for item in results] == ["passed", "passed", "passed"]
+    observer.close()
+
+
+def test_db_assertion_engine_missing_resource_is_inconclusive(tmp_path: Path):
+    from sqlalchemy import create_engine, text
+
+    from api_agent.database import DatabaseObserver
+    from api_agent.db_assert import DbAssertionEngine
+    from api_agent.llm_rules import LLMDBAssertion
+
+    db_path = tmp_path / "dsl2.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY, balance REAL)"))
+    engine.dispose()
+
+    observer = DatabaseObserver(f"sqlite:///{db_path}")
+    observer.allowed_tables = {"users": "id"}
+    # 资源池里没有 product —— 真实性约束：如实报 inconclusive，不编造 ID
+    engine_dsl = DbAssertionEngine(
+        [LLMDBAssertion(kind="field_delta", table="users", field="balance", key_resource="product", delta=-1.0)],
+        {},
+        observer,
+    )
+    before = engine_dsl.capture_before()
+    results = engine_dsl.evaluate(before)
+    assert results[0].status == "inconclusive"
+    observer.close()
+
+
+def test_db_assertion_engine_rejects_table_outside_whitelist(tmp_path: Path):
+    from sqlalchemy import create_engine, text
+
+    from api_agent.database import DatabaseObserver
+    from api_agent.db_assert import DbAssertionEngine
+    from api_agent.llm_rules import LLMDBAssertion
+
+    db_path = tmp_path / "dsl3.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE secrets (id INTEGER PRIMARY KEY)"))
+    engine.dispose()
+
+    observer = DatabaseObserver(f"sqlite:///{db_path}")
+    observer.allowed_tables = {"users": "id"}
+    engine_dsl = DbAssertionEngine(
+        [LLMDBAssertion(kind="row_created", table="secrets")],
+        {},
+        observer,
+    )
+    before = engine_dsl.capture_before()
+    results = engine_dsl.evaluate(before)
+    assert results[0].status == "inconclusive"
+    assert "whitelist" in results[0].detail
+    observer.close()
+
+
+def test_compile_llm_cases_matches_dsl_assertion_names():
+    from api_agent.llm_rules import LLMDBAssertion, LLMRule, LLMRuleSet
+    from api_agent.planner import compile_llm_cases
+
+    rule_set = LLMRuleSet(
+        rules=[
+            LLMRule(
+                rule_id="REQ-ORDER-001.stock",
+                title="下单后库存扣减",
+                interface="POST /api/orders",
+                action_path="/api/orders",
+                action_body={"product_id": "{{product.id}}", "quantity": 2},
+                expected_status_codes=[201],
+                db_assertions=[
+                    LLMDBAssertion(kind="field_delta", table="products", field="stock", key_resource="product", delta=-2),
+                    LLMDBAssertion(kind="field_delta", table="users", field="balance", key_resource="user", delta=-20.0),
+                    LLMDBAssertion(kind="row_created", table="orders"),
+                ],
+            )
+        ]
+    )
+    cases = compile_llm_cases(rule_set)
+
+    assert len(cases) == 1
+    case = cases[0]
+    assert case.case_id == "llm.REQ-ORDER-001.stock"
+    assert case.scenario == "llm"
+    assert "db:field_delta:products:stock" in case.required_assertions
+    assert "db:field_delta:users:balance" in case.required_assertions
+    assert "db:row_created:orders:count" in case.required_assertions

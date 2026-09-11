@@ -13,6 +13,33 @@ from api_agent.models import (
 )
 
 
+def compile_llm_cases(rule_set) -> list[TestCase]:
+    """Compile validated LLM rules into TestCases (scenario=llm).
+
+    断言名 = db:{kind}:{table}:{field}，与 DSL 执行器产出的断言名一致，
+    使 required_assertions 闭环可校验。
+    """
+    cases: list[TestCase] = []
+    for rule in rule_set.rules:
+        assertions = ["http_status"] + [
+            f"db:{item.kind}:{item.table}:{item.field or 'count'}" for item in rule.db_assertions
+        ]
+        cases.append(
+            TestCase(
+                case_id=f"llm.{rule.rule_id}",
+                operation_id=f"llm.{rule.rule_id}",
+                title=rule.title,
+                category="business",
+                scenario="llm",
+                source_refs=[f"llm:{rule.rule_id}", f"doc:{rule.interface}"],
+                expected_status_codes=rule.expected_status_codes,
+                required_assertions=assertions,
+                evidence_requirements=["http", "database"],
+            )
+        )
+    return cases
+
+
 def plan_cases(
     requirement: NormalizedRequirement,
     review: RequirementReview | None = None,

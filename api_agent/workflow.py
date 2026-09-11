@@ -26,6 +26,7 @@ from langgraph.graph import END, START, StateGraph
 from api_agent.adapters import get_adapter
 from api_agent.agentlog import AgentLogger
 from api_agent.artifacts import read_model, write_json, write_model
+from api_agent.llm_client import is_llm_enabled
 from api_agent.contract import compare_contracts
 from api_agent.generator import generate_pytest, review_generated_script
 from api_agent.models import (
@@ -91,6 +92,7 @@ class V2Workflow:
         max_repair_attempts: int = 2,
         adapter: str = "mini_shop",
         fixed_accounts: bool = False,
+        llm_analysis: bool = False,
         run_id: str,
     ):
         self.output_dir = output_dir
@@ -101,6 +103,7 @@ class V2Workflow:
         self.runtime_openapi = runtime_openapi or f"{base_url.rstrip('/')}/openapi.json"
         self.adapter = adapter
         self.fixed_accounts = fixed_accounts
+        self.llm_analysis = llm_analysis
         self.run_id = run_id
         self.repair = RepairManager(output_dir, max_repair_attempts)
         self.logger = AgentLogger(output_dir / "evidence" / run_id / "agent-log.jsonl", run_id)
@@ -113,6 +116,7 @@ class V2Workflow:
         graph = StateGraph(V2State)
         graph.add_node("parse_requirement", self.parse_requirement)
         graph.add_node("review_requirement", self.review_requirement)
+        graph.add_node("analyze_requirements", self.analyze_requirements)
         graph.add_node("design_cases", self.design_cases)
         graph.add_node("review_coverage", self.review_coverage)
         graph.add_node("generate_script", self.generate_script)
@@ -128,8 +132,9 @@ class V2Workflow:
         graph.add_conditional_edges(
             "review_requirement",
             lambda state: state["route"],
-            {"approved": "design_cases", "retry": "parse_requirement", "human": "finalize"},
+            {"approved": "analyze_requirements", "retry": "parse_requirement", "human": "finalize"},
         )
+        graph.add_edge("analyze_requirements", "design_cases")
         graph.add_edge("design_cases", "review_coverage")
         graph.add_conditional_edges(
             "review_coverage",
@@ -334,11 +339,60 @@ class V2Workflow:
             )
         return update
 
+    def analyze_requirements(self, state: V2State) -> dict[str, Any]:
+        """LLM 需求拆解节点：显式开启且配置齐全时才调用大模型。"""
+        if not (self.llm_analysis and is_llm_enabled()):
+            return self._trace(
+                state,
+                "analyze_requirements",
+                "skipped",
+                "design_cases",
+                "LLM analysis disabled (no --llm-analysis or missing .env config)",
+            )
+        try:
+            from api_agent.adapters import get_adapter
+            from api_agent.llm_analyst import analyze_requirements, analyst_model_name
+
+            requirement = read_model(self.output_dir / "normalized-requirement.json", NormalizedRequirement)
+            rules = analyze_requirements(
+                requirement,
+                self.requirements_md,
+                get_adapter(self.adapter).observable_tables,
+            )
+            write_json(self.output_dir / "llm-rules.json", rules.model_dump())
+            update = self._trace(
+                state,
+                "analyze_requirements",
+                "done",
+                "design_cases",
+                f"{len(rules.rules)} rules extracted by {analyst_model_name()}",
+            )
+            update.update(
+                self._message(
+                    state,
+                    "requirement_analyst",
+                    "case_designer",
+                    "llm_rules",
+                    str(self.output_dir / "llm-rules.json"),
+                )
+            )
+            return update
+        except Exception as exc:  # LLM 失败不阻断确定性覆盖，只记录问题
+            update = self._trace(state, "analyze_requirements", "llm_error", "design_cases", f"{type(exc).__name__}: {exc}")
+            return {"issues": state.get("issues", []) + [f"llm analysis failed: {type(exc).__name__}: {exc}"], **update}
+
     def design_cases(self, state: V2State) -> dict[str, Any]:
         """Case Design Agent: plan the standard case JSON from the baseline."""
         requirement = read_model(self.output_dir / "normalized-requirement.json", NormalizedRequirement)
         requirement_review = read_model(self.output_dir / "requirement-review.json", RequirementReview)
         cases = plan_cases(requirement, requirement_review, self.adapter)
+        rules_path = self.output_dir / "llm-rules.json"
+        if rules_path.exists():
+            from api_agent.llm_rules import LLMRuleSet
+            from api_agent.planner import compile_llm_cases
+
+            rule_set = LLMRuleSet.model_validate_json(rules_path.read_text(encoding="utf-8"))
+            cases.cases.extend(compile_llm_cases(rule_set))
         write_model(self.output_dir / "test-cases.json", cases)
         update = self._trace(state, "case_designer", "done", "review_coverage", f"{len(cases.cases)} cases")
         update.update(
@@ -557,6 +611,7 @@ class V2Workflow:
             run_id=self.run_id,
             adapter_name=self.adapter,
             fixed_accounts=self.fixed_accounts,
+            rules_path=self.output_dir / "llm-rules.json",
         )
         summary = (
             f"returncode={returncode}, passed={report.summary.passed}, "

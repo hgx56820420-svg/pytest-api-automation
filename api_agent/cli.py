@@ -57,6 +57,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Deterministic per-case usernames; leftover accounts are cleaned via the adapter cleanup spec",
     )
+    v2_parser.add_argument(
+        "--llm-analysis",
+        action="store_true",
+        help="Enable the LangChain requirement analyst (needs LLM_API_KEY/LLM_BASE_URL/LLM_MODEL in .env)",
+    )
 
     args = parser.parse_args(argv)
     if args.command == "generate":
@@ -95,6 +100,7 @@ def _run_v2(args: argparse.Namespace) -> int:
         max_repair_attempts=args.max_repair_attempts,
         adapter=args.adapter,
         fixed_accounts=args.fixed_accounts,
+        llm_analysis=args.llm_analysis,
         run_id=run_id,
     )
     try:

@@ -36,6 +36,8 @@ class DomainAdapter:
     blanket_auth: list[tuple[str, str]] = field(default_factory=list)
     # 固定账号模式（--fixed-accounts）下，注册撞车时由 CleanupTool 按此规格清理
     cleanup_spec: CleanupSpec | None = None
+    # 断言 DSL 可观察表白名单：table -> 主键列（LLM 规则的 table 只能出自这里）
+    observable_tables: dict[str, str] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -292,6 +294,14 @@ MINI_SHOP_ADAPTER = DomainAdapter(
         prefix="agent_",
         children=[("orders", "user_id"), ("cart_items", "user_id")],
     ),
+    observable_tables={
+        "products": "id",
+        "users": "id",
+        "orders": "id",
+        "cart_items": "id",
+        "coupons": "id",
+        "inventory_transactions": "id",
+    },
 )
 
 LIBRARY_ADAPTER = DomainAdapter(
@@ -309,6 +319,7 @@ LIBRARY_ADAPTER = DomainAdapter(
         prefix="agent_",
         children=[("borrows", "user_id")],
     ),
+    observable_tables={"books": "id", "users": "id", "borrows": "id"},
 )
 
 MEETING_ADAPTER = DomainAdapter(
@@ -326,6 +337,7 @@ MEETING_ADAPTER = DomainAdapter(
         prefix="agent_",
         children=[("bookings", "user_id")],
     ),
+    observable_tables={"rooms": "id", "users": "id", "bookings": "id"},
 )
 
 ADAPTERS: dict[str, DomainAdapter] = {
@@ -365,4 +377,5 @@ def create_executor(
         requirement=requirement,
         cleanup_spec=adapter.cleanup_spec,
         fixed_accounts=os.environ.get("API_AGENT_FIXED_ACCOUNTS") == "1",
+        observable_tables=adapter.observable_tables,
     )

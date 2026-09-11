@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import os
 import time
 import uuid
 from pathlib import Path
@@ -33,12 +35,14 @@ class ScenarioExecutor:
         requirement: NormalizedRequirement,
         cleanup_spec: Any = None,
         fixed_accounts: bool = False,
+        observable_tables: dict[str, str] | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         parsed = urlsplit(self.base_url)
         if parsed.scheme != "http" or parsed.hostname not in LOCAL_TEST_HOSTS:
             raise ValueError("runner only permits a local test target (http://127.0.0.1 or http://localhost)")
         self.db = self.observer_class(database_url)
+        self.db.allowed_tables = dict(observable_tables or {})
         self.database_url = database_url
         self.cleanup_spec = cleanup_spec
         self.fixed_accounts = fixed_accounts
@@ -611,6 +615,71 @@ class ScenarioExecutor:
             {},
             {},
         )
+
+    # -- LLM rule cases (declarative DSL, deterministic execution) -------
+
+    def _load_llm_rules(self) -> dict[str, Any]:
+        rules_path = os.environ.get("API_AGENT_RULES_PATH")
+        if not rules_path or not Path(rules_path).exists():
+            return {}
+        return json.loads(Path(rules_path).read_text(encoding="utf-8"))
+
+    def _scenario_llm(self, case, assertions):
+        """Execute one LLM-extracted rule: setup primitives, action, DSL assertions.
+
+        规则来自 llm-rules.json（经 Pydantic 校验）；LLM 从不直接触库，
+        断言全部由 DbAssertionEngine 的白名单查询执行。
+        """
+        from api_agent.db_assert import DbAssertionEngine, resolve_placeholders
+        from api_agent.llm_rules import LLMDBAssertion
+
+        rule_id = case.case_id.removeprefix("llm.")
+        rules_doc = self._load_llm_rules()
+        rule = next((item for item in rules_doc.get("rules", []) if item.get("rule_id") == rule_id), None)
+        if rule is None:
+            self._assert(assertions, "rule_present", False, True, False, f"rule {rule_id} not found in llm-rules.json")
+            return _request_view("GET", "", {}), _response_view_of_none(), {}, {}
+
+        method = rule.get("action_method") or rule.get("interface", "POST").split(" ", 1)[0] or "POST"
+        resources: dict[str, Any] = {}
+        token_headers: dict[str, str] = {}
+        try:
+            for step in rule.get("setup", []):
+                if step.get("action") == "register":
+                    user, token_headers = self._register_and_auth()
+                    resources["user"] = user
+                    resources[step.get("resource") or "user"] = user
+                elif step.get("action") == "create":
+                    body = resolve_placeholders(step.get("overrides") or {}, resources)
+                    response = self._request(step.get("method", "POST"), step.get("path", ""), headers=token_headers, json_body=body or None)
+                    response.raise_for_status()
+                    resources[step.get("resource") or "created"] = response.json()
+
+            db_assertions = [LLMDBAssertion.model_validate(item) for item in rule.get("db_assertions", [])]
+            engine = DbAssertionEngine(db_assertions, resources, self.db)
+            before_states = engine.capture_before()
+
+            action_path = resolve_placeholders(rule.get("action_path", ""), resources)
+            action_body = resolve_placeholders(rule.get("action_body", {}) or {}, resources)
+            response = self._request(method, action_path, headers=token_headers, json_body=action_body or None)
+            self._assert(
+                assertions,
+                "http_status",
+                response.status_code in case.expected_status_codes,
+                case.expected_status_codes,
+                response.status_code,
+            )
+            resources["result"] = response.json() if response.ok else {}
+            assertions.extend(engine.evaluate(before_states))
+            return (
+                _request_view(method, action_path, {"json_body": action_body}),
+                _response_view(response),
+                {},
+                {},
+            )
+        except (requests.RequestException, OSError) as exc:
+            self._assert(assertions, "runtime_available", False, True, False, str(exc))
+            return _request_view("GET", "", {}), _response_view_of_none(), {}, {}
 
     def _table_count(self, table: str) -> int:
         if table != "products":

@@ -75,6 +75,7 @@ def run(
     run_id: str | None = None,
     adapter_name: str | None = None,
     fixed_accounts: bool = False,
+    rules_path: Path | None = None,
 ) -> tuple[ExecutionReport, int]:
     requirement = read_model(output_dir / "normalized-requirement.json", NormalizedRequirement)
     cases = read_model(output_dir / "test-cases.json", TestCaseDocument)
@@ -109,6 +110,7 @@ def run(
             "API_AGENT_REQUIREMENT_PATH": str((output_dir / "normalized-requirement.json").resolve()),
             "API_AGENT_ADAPTER": adapter_name or "mini_shop",
             "API_AGENT_FIXED_ACCOUNTS": "1" if fixed_accounts else "0",
+            "API_AGENT_RULES_PATH": str(rules_path) if rules_path and rules_path.exists() else "",
         }
     )
     command = [

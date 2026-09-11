@@ -19,3 +19,5 @@ allure-pytest==2.16.0
 # V2 多 Agent 工作流编排（LangGraph 用于有分支的工作流；节点目前为确定性函数，
 # 后续接入 LLM 时在节点内部使用 LangChain 结构化调用即可，图结构不变）
 langgraph==1.2.11
+# 需求拆解 Agent 的 LLM 结构化调用（可选功能：--llm-analysis + .env 配置）
+langchain-openai==1.6.2
