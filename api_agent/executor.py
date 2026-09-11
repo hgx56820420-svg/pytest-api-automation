@@ -31,18 +31,25 @@ class ScenarioExecutor:
         evidence_dir: Path,
         run_id: str,
         requirement: NormalizedRequirement,
+        cleanup_spec: Any = None,
+        fixed_accounts: bool = False,
     ):
         self.base_url = base_url.rstrip("/")
         parsed = urlsplit(self.base_url)
         if parsed.scheme != "http" or parsed.hostname not in LOCAL_TEST_HOSTS:
             raise ValueError("runner only permits a local test target (http://127.0.0.1 or http://localhost)")
         self.db = self.observer_class(database_url)
+        self.database_url = database_url
+        self.cleanup_spec = cleanup_spec
+        self.fixed_accounts = fixed_accounts
         self.evidence_dir = evidence_dir
         self.run_id = run_id
         self.operations = {item.operation_id: item for item in requirement.operations}
         self.session = requests.Session()
         self.logger = AgentLogger(evidence_dir / "agent-log.jsonl", run_id)
         self._last_request_id = ""
+        self._case_key = ""
+        self._registration_index = 0
 
     def close(self) -> None:
         self.session.close()
@@ -60,6 +67,9 @@ class ScenarioExecutor:
             if handler is None:
                 self._assert(assertions, "scenario_supported", False, True, False, f"Unsupported scenario: {case.scenario}")
             else:
+                # 固定账号模式下，用户名由 (用例, 注册序号) 决定，跨运行保持一致
+                self._case_key = safe_name(case.case_id)[:13]
+                self._registration_index = 0
                 request_evidence, response_evidence, before, after = handler(case, assertions)
         except (requests.RequestException, OSError) as exc:
             assertions.append(AssertionResult(name="runtime_available", status="inconclusive", detail=str(exc)))
@@ -119,12 +129,48 @@ class ScenarioExecutor:
         return response
 
     def _register_and_auth(self) -> tuple[dict[str, Any], dict[str, str]]:
-        credentials = {"username": f"agent_{uuid.uuid4().hex[:12]}", "password": "Test123456"}
+        username = self._next_username()
+        credentials = {"username": username, "password": "Test123456"}
         registered = self._request("POST", "/api/auth/register", json_body=credentials)
+        if registered.status_code == 409 and self.fixed_accounts:
+            # 上次运行残留的同名账号：交给确定性清理工具先查后删，再重试一次
+            if self._recover_fixed_account(username):
+                registered = self._request("POST", "/api/auth/register", json_body=credentials)
+        if registered.status_code == 409:
+            # 真实性约束兜底：清理不可用时换全新账号继续，不中断整轮运行
+            username = f"agent_{uuid.uuid4().hex[:12]}"
+            credentials = {"username": username, "password": "Test123456"}
+            registered = self._request("POST", "/api/auth/register", json_body=credentials)
         registered.raise_for_status()
         login = self._request("POST", "/api/auth/login", json_body=credentials)
         login.raise_for_status()
         return registered.json(), {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    def _next_username(self) -> str:
+        if not self.fixed_accounts:
+            return f"agent_{uuid.uuid4().hex[:12]}"
+        self._registration_index += 1
+        # agent_(6) + case_key(13) + _(1) + 单位序号(1) = 21 → key 截到 12 保证 ≤20
+        return f"agent_{self._case_key[:12]}_{self._registration_index}"
+
+    def _recover_fixed_account(self, username: str) -> bool:
+        if not self.cleanup_spec:
+            self.logger.log(
+                "cleanup_account",
+                agent="executor",
+                level="warning",
+                detail={"username": username, "deleted": False, "reason": "no_cleanup_spec"},
+            )
+            return False
+        from api_agent.cleanup import CleanupTool
+
+        tool = CleanupTool(self.database_url, self.cleanup_spec)
+        try:
+            result = tool.cleanup_username(username)
+        finally:
+            tool.close()
+        self.logger.log("cleanup_account", agent="executor", detail=result)
+        return bool(result.get("deleted"))
 
     def _create_product(self, headers: dict[str, str], *, price: float = 10.0, stock: int = 5) -> dict[str, Any]:
         response = self._request(

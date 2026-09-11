@@ -88,7 +88,25 @@
 - [ ] 需求文档用 `#### REQ-XX-NNN \`METHOD /path\`` 标题（多段前缀可用）
 - [ ] 文档措辞避开既有领域的场景标记词（分页参数/余额不足/商品/订单/库存不足/重复支付/price > 0 等），或先扩充 adapter 的标记表
 - [ ] 段落级认证规则写入 adapter 的 `blanket_auth`
-- [ ] 场景执行器中所有测试数据带唯一后缀（rerun-safe）
+- [ ] 场景执行器中所有测试数据带唯一后缀（rerun-safe）；或使用 `--fixed-accounts` 固定账号模式（默认唯一后缀），此时必须为 adapter 配置 `cleanup_spec`
 - [ ] 422 类校验一律走 Pydantic validator，不要手动 `HTTPException(422)`
 - [ ] 链路验证四步：parse → review → plan/coverage → stub workflow E2E
 - [ ] 真实 E2E 至少跑两轮（第二轮回跑验证 rerun-safe）
+
+## 五、固定账号模式（--fixed-accounts）与数据清理
+
+针对"想用固定用户名 + 清理工具回收"的需求，框架提供可选模式（默认仍为唯一后缀，天然 rerun-safe）：
+
+```text
+固定用户名 = agent_ + 用例ID派生 + 注册序号（同一用例跨运行同名）
+  → 注册遇 409（上次残留）
+  → CleanupTool（确定性 Python，直连测试库，api_agent/cleanup.py）：
+      ① 真实性约束：先 SELECT 后 DELETE，账号不存在时如实上报 account_not_found，
+         绝不虚构删除成功，也绝不猜测账号 ID
+      ② 前缀护栏：只清理 agent_ 开头的测试账号，其余账号拒绝触碰
+      ③ 用户名下的业务子记录（adapter 的 cleanup_spec.children）与账号同事务删除
+  → 删除成功 → 重试注册一次；仍失败 → 自动退回唯一后缀新账号继续运行
+  → 全部清理动作写入 agent-log.jsonl（cleanup_account 事件，含真实 user_id）
+```
+
+防幻觉设计：传入清理工具的账号标识永远来自确定性代码（固定用户名生成规则 / 数据库真实查询），不经过任何模型输出；删除结果为结构化 JSON，可审计。已在 meeting 服务上双轮 E2E 验证：第二轮 19 次撞车全部正确清理并重试成功，28/28 PASS。

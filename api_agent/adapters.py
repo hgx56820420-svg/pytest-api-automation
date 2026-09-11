@@ -23,7 +23,7 @@ from api_agent.library_executor import LibraryExecutor
 from api_agent.library_observer import LibraryObserver
 from api_agent.meeting_executor import MeetingExecutor
 from api_agent.meeting_observer import MeetingObserver
-from api_agent.models import TestCase
+from api_agent.models import CleanupSpec, TestCase
 
 
 @dataclass
@@ -34,6 +34,8 @@ class DomainAdapter:
     executor_class: type
     observer_class: type
     blanket_auth: list[tuple[str, str]] = field(default_factory=list)
+    # 固定账号模式（--fixed-accounts）下，注册撞车时由 CleanupTool 按此规格清理
+    cleanup_spec: CleanupSpec | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -284,6 +286,12 @@ MINI_SHOP_ADAPTER = DomainAdapter(
         ("所有订单接口均需要认证", "/api/orders"),
         ("所有购物车接口都需要 Bearer Token", "/api/cart"),
     ],
+    cleanup_spec=CleanupSpec(
+        users_table="users",
+        username_column="username",
+        prefix="agent_",
+        children=[("orders", "user_id"), ("cart_items", "user_id")],
+    ),
 )
 
 LIBRARY_ADAPTER = DomainAdapter(
@@ -295,6 +303,12 @@ LIBRARY_ADAPTER = DomainAdapter(
     blanket_auth=[
         ("所有借阅接口均需要认证", "/api/borrows"),
     ],
+    cleanup_spec=CleanupSpec(
+        users_table="users",
+        username_column="username",
+        prefix="agent_",
+        children=[("borrows", "user_id")],
+    ),
 )
 
 MEETING_ADAPTER = DomainAdapter(
@@ -306,6 +320,12 @@ MEETING_ADAPTER = DomainAdapter(
     blanket_auth=[
         ("所有预约接口均需要认证", "/api/bookings"),
     ],
+    cleanup_spec=CleanupSpec(
+        users_table="users",
+        username_column="username",
+        prefix="agent_",
+        children=[("bookings", "user_id")],
+    ),
 )
 
 ADAPTERS: dict[str, DomainAdapter] = {
@@ -334,6 +354,8 @@ def create_executor(
     requirement: Any,
 ):
     """Build the adapter's executor; called from the generated pytest."""
+    import os
+
     adapter = get_adapter(adapter_name)
     return adapter.executor_class(
         base_url=base_url,
@@ -341,4 +363,6 @@ def create_executor(
         evidence_dir=evidence_dir,
         run_id=run_id,
         requirement=requirement,
+        cleanup_spec=adapter.cleanup_spec,
+        fixed_accounts=os.environ.get("API_AGENT_FIXED_ACCOUNTS") == "1",
     )

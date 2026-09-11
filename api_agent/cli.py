@@ -51,7 +51,12 @@ def main(argv: list[str] | None = None) -> int:
     v2_parser.add_argument("--runtime-openapi")
     v2_parser.add_argument("--output", type=Path, default=Path("artifacts/v2"))
     v2_parser.add_argument("--max-repair-attempts", type=int, default=2)
-    v2_parser.add_argument("--adapter", default="mini_shop", help="Domain adapter: mini_shop or library")
+    v2_parser.add_argument("--adapter", default="mini_shop", help="Domain adapter: mini_shop, library or meeting")
+    v2_parser.add_argument(
+        "--fixed-accounts",
+        action="store_true",
+        help="Deterministic per-case usernames; leftover accounts are cleaned via the adapter cleanup spec",
+    )
 
     args = parser.parse_args(argv)
     if args.command == "generate":
@@ -89,6 +94,7 @@ def _run_v2(args: argparse.Namespace) -> int:
         runtime_openapi=args.runtime_openapi,
         max_repair_attempts=args.max_repair_attempts,
         adapter=args.adapter,
+        fixed_accounts=args.fixed_accounts,
         run_id=run_id,
     )
     try:

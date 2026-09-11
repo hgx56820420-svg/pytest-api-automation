@@ -53,7 +53,7 @@ def _passed_evidence(run_id: str, case, request_id: str) -> CaseEvidence:
 def make_stub_run(*, failing_case_ids: list[str] | None = None):
     """Build a deterministic in-process replacement for pipeline.run."""
 
-    def stub_run(output_dir, base_url, database_url, runtime_openapi=None, run_id=None, adapter_name=None):
+    def stub_run(output_dir, base_url, database_url, runtime_openapi=None, run_id=None, adapter_name=None, fixed_accounts=False):
         """Write full evidence + a PASS/FAIL execution report without HTTP."""
         requirement_model = read_model(output_dir / "normalized-requirement.json", NormalizedRequirement)
         cases = read_model(output_dir / "test-cases.json", TestCaseDocument)
@@ -450,3 +450,108 @@ def test_workflow_requires_human_when_reviews_never_pass(tmp_path: Path, monkeyp
     assert workflow.repair.history.escalated_to_human
     report = json.loads((tmp_path / "artifacts" / "workflow-report.json").read_text(encoding="utf-8"))
     assert report["decision"] == "NEEDS_HUMAN"
+
+
+# ---------------------------------------------------------------------------
+# Deterministic cleanup tool (fixed-account mode support)
+# ---------------------------------------------------------------------------
+
+
+def _seed_cleanup_db(tmp_path: Path) -> str:
+    """Create users + orders tables with one test account and one bystander."""
+    from sqlalchemy import create_engine, text
+
+    db_path = tmp_path / "cleanup.db"
+    engine = create_engine(f"sqlite:///{db_path}")
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT)"))
+        connection.execute(text("CREATE TABLE orders (id INTEGER PRIMARY KEY, user_id INTEGER, amount REAL)"))
+        connection.execute(text("INSERT INTO users (username) VALUES ('agent_fixed_1')"))
+        connection.execute(text("INSERT INTO users (username) VALUES ('alice')"))
+        connection.execute(text("INSERT INTO orders (user_id, amount) VALUES (1, 10.0)"))
+        connection.execute(text("INSERT INTO orders (user_id, amount) VALUES (1, 20.0)"))
+        connection.execute(text("INSERT INTO orders (user_id, amount) VALUES (2, 30.0)"))
+    engine.dispose()
+    return f"sqlite:///{db_path}"
+
+
+def test_cleanup_tool_deletes_account_and_children_only(tmp_path: Path):
+    from api_agent.cleanup import CleanupTool
+    from api_agent.models import CleanupSpec
+
+    spec = CleanupSpec(prefix="agent_", children=[("orders", "user_id")])
+    tool = CleanupTool(_seed_cleanup_db(tmp_path), spec)
+
+    result = tool.cleanup_username("agent_fixed_1")
+
+    assert result == {
+        "username": "agent_fixed_1",
+        "found": True,
+        "deleted": True,
+        "user_id": 1,
+        "children_deleted": {"orders": 2},
+    }
+    assert tool.find_user_id("agent_fixed_1") is None
+    assert tool.find_user_id("alice") == 2, "非测试账号绝不能被碰到"
+    tool.close()
+
+
+def test_cleanup_tool_reports_missing_account_honestly(tmp_path: Path):
+    """真实性约束：账号不存在时必须如实上报，不得虚构删除成功。"""
+    from api_agent.cleanup import CleanupTool
+    from api_agent.models import CleanupSpec
+
+    spec = CleanupSpec(prefix="agent_", children=[("orders", "user_id")])
+    tool = CleanupTool(_seed_cleanup_db(tmp_path), spec)
+
+    result = tool.cleanup_username("agent_never_registered")
+
+    assert result["found"] is False
+    assert result["deleted"] is False
+    assert result["reason"] == "account_not_found"
+    tool.close()
+
+
+def test_cleanup_tool_prefix_guard_rejects_real_accounts(tmp_path: Path):
+    """前缀护栏：非 agent_ 开头的账号一律拒绝清理。"""
+    from api_agent.cleanup import CleanupTool
+    from api_agent.models import CleanupSpec
+
+    spec = CleanupSpec(prefix="agent_", children=[("orders", "user_id")])
+    tool = CleanupTool(_seed_cleanup_db(tmp_path), spec)
+
+    result = tool.cleanup_username("alice")
+
+    assert result["deleted"] is False
+    assert result["reason"] == "prefix_guard_rejected"
+    assert tool.find_user_id("alice") == 2
+    tool.close()
+
+
+def test_fixed_mode_username_is_deterministic_and_within_limits(tmp_path: Path):
+    """固定账号模式下用户名由 (用例, 序号) 决定，跨运行一致且不超过长度限制。"""
+    from api_agent.cleanup import CleanupTool
+    from api_agent.executor import ScenarioExecutor
+    from api_agent.models import CleanupSpec
+
+    executor = ScenarioExecutor(
+        base_url="http://127.0.0.1:8010",
+        database_url=f"sqlite:///{tmp_path / 'x.db'}",
+        evidence_dir=tmp_path,
+        run_id="run-x",
+        requirement=requirement(),
+        cleanup_spec=CleanupSpec(prefix="agent_"),
+        fixed_accounts=True,
+    )
+    executor._case_key = "a_very_long_case_id_that_exceeds"
+    executor._registration_index = 0
+
+    first = executor._next_username()
+    second = executor._next_username()
+    # 同一用例同一序号跨运行必须得到同一个名字（固定账号的核心性质）
+    executor._registration_index = 0
+    repeat = executor._next_username()
+
+    assert first == repeat
+    assert first != second
+    assert len(first) <= 20 and first.startswith("agent_")

@@ -284,3 +284,18 @@ class AgentMessage(StrictModel):
     payload_hash: str = ""
     decision: str = ""
     issues: list[str] = Field(default_factory=list)
+
+
+class CleanupSpec(StrictModel):
+    """Declares how the deterministic cleanup tool may touch a test database.
+
+    The tool is evidence-driven and truth-constrained: it only deletes rows
+    whose username matches ``prefix``, always SELECTs before DELETE, and
+    reports "not found" honestly instead of fabricating success.
+    """
+
+    users_table: str = "users"
+    username_column: str = "username"
+    prefix: str = "agent_"
+    # (table, user_fk_column) 删除账号前必须先清掉的业务子记录
+    children: list[tuple[str, str]] = Field(default_factory=list)

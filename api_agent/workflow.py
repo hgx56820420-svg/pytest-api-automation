@@ -90,6 +90,7 @@ class V2Workflow:
         runtime_openapi: str | None = None,
         max_repair_attempts: int = 2,
         adapter: str = "mini_shop",
+        fixed_accounts: bool = False,
         run_id: str,
     ):
         self.output_dir = output_dir
@@ -99,6 +100,7 @@ class V2Workflow:
         self.database_url = database_url
         self.runtime_openapi = runtime_openapi or f"{base_url.rstrip('/')}/openapi.json"
         self.adapter = adapter
+        self.fixed_accounts = fixed_accounts
         self.run_id = run_id
         self.repair = RepairManager(output_dir, max_repair_attempts)
         self.logger = AgentLogger(output_dir / "evidence" / run_id / "agent-log.jsonl", run_id)
@@ -545,6 +547,7 @@ class V2Workflow:
             self.runtime_openapi,
             run_id=self.run_id,
             adapter_name=self.adapter,
+            fixed_accounts=self.fixed_accounts,
         )
         summary = (
             f"returncode={returncode}, passed={report.summary.passed}, "

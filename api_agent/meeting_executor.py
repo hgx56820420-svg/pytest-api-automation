@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import uuid
-from pathlib import Path
 from typing import Any
 
 from api_agent.executor import ScenarioExecutor, _request_view, _response_view
 from api_agent.meeting_observer import MeetingObserver
-from api_agent.models import NormalizedRequirement
 
 # 固定远期日期保证确定性；相邻时段（11-12 点）不重叠，可复用同一会议室
 BOOKING_DAY = "2031-03-01"

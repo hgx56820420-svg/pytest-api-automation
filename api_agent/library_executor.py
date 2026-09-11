@@ -3,28 +3,17 @@
 from __future__ import annotations
 
 import uuid
-from pathlib import Path
 from typing import Any
 
 from api_agent.executor import ScenarioExecutor, _request_view, _response_view
 from api_agent.library_observer import LibraryObserver
-from api_agent.models import AssertionResult, NormalizedRequirement, TestCase
+from api_agent.models import TestCase
 
 
 class LibraryExecutor(ScenarioExecutor):
     """Same evidence pipeline as Mini Shop, Library domain scenarios."""
 
     observer_class = LibraryObserver
-
-    def __init__(
-        self,
-        base_url: str,
-        database_url: str,
-        evidence_dir: Path,
-        run_id: str,
-        requirement: NormalizedRequirement,
-    ):
-        super().__init__(base_url, database_url, evidence_dir, run_id, requirement)
 
     # -- helpers ---------------------------------------------------------
 
