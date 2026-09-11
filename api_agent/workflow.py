@@ -354,19 +354,19 @@ class V2Workflow:
             from api_agent.llm_analyst import analyze_requirements, analyst_model_name
 
             requirement = read_model(self.output_dir / "normalized-requirement.json", NormalizedRequirement)
-            rules = analyze_requirements(
+            rules, repairs = analyze_requirements(
                 requirement,
                 self.requirements_md,
                 get_adapter(self.adapter).observable_tables,
             )
-            write_json(self.output_dir / "llm-rules.json", rules.model_dump())
-            update = self._trace(
-                state,
-                "analyze_requirements",
-                "done",
-                "design_cases",
-                f"{len(rules.rules)} rules extracted by {analyst_model_name()}",
-            )
+            rules_doc = rules.model_dump()
+            if repairs:
+                rules_doc["repairs"] = repairs
+            write_json(self.output_dir / "llm-rules.json", rules_doc)
+            detail = f"{len(rules.rules)} rules extracted by {analyst_model_name()}"
+            if repairs:
+                detail += f", {len(repairs)} deterministic id repairs"
+            update = self._trace(state, "analyze_requirements", "done", "design_cases", detail)
             update.update(
                 self._message(
                     state,

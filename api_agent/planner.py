@@ -31,7 +31,7 @@ def compile_llm_cases(rule_set) -> list[TestCase]:
                 title=rule.title,
                 category="business",
                 scenario="llm",
-                source_refs=[f"llm:{rule.rule_id}", f"doc:{rule.interface}"],
+                source_refs=[f"llm:{rule.rule_id}", f"doc:{rule.action}"],
                 expected_status_codes=rule.expected_status_codes,
                 required_assertions=assertions,
                 evidence_requirements=["http", "database"],

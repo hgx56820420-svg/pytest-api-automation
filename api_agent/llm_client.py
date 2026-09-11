@@ -56,6 +56,6 @@ def get_chat_model():
         base_url=base,
         model=llm_setting("LLM_MODEL"),
         temperature=0,
-        timeout=120,
-        max_retries=2,
+        timeout=180,
+        max_retries=6,  # 免费档高峰期常见 429，依赖 SDK 指数退避
     )

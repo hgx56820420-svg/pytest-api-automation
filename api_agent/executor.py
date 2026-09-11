@@ -618,6 +618,14 @@ class ScenarioExecutor:
 
     # -- LLM rule cases (declarative DSL, deterministic execution) -------
 
+    def _schema_for(self, path: str, method: str) -> dict[str, Any] | None:
+        """Find the request schema of a known operation by path+method."""
+        wanted = (path, method.upper())
+        for operation in self.operations.values():
+            if (operation.path, operation.method) == wanted:
+                return operation.request_schema
+        return None
+
     def _load_llm_rules(self) -> dict[str, Any]:
         rules_path = os.environ.get("API_AGENT_RULES_PATH")
         if not rules_path or not Path(rules_path).exists():
@@ -640,27 +648,36 @@ class ScenarioExecutor:
             self._assert(assertions, "rule_present", False, True, False, f"rule {rule_id} not found in llm-rules.json")
             return _request_view("GET", "", {}), _response_view_of_none(), {}, {}
 
-        method = rule.get("action_method") or rule.get("interface", "POST").split(" ", 1)[0] or "POST"
         resources: dict[str, Any] = {}
         token_headers: dict[str, str] = {}
+        action_raw = resolve_placeholders(rule.get("action", ""), resources)
+        method, _, path_template = action_raw.partition(" ")
         try:
             for step in rule.get("setup", []):
-                if step.get("action") == "register":
-                    user, token_headers = self._register_and_auth()
-                    resources["user"] = user
-                    resources[step.get("resource") or "user"] = user
-                elif step.get("action") == "create":
-                    body = resolve_placeholders(step.get("overrides") or {}, resources)
-                    response = self._request(step.get("method", "POST"), step.get("path", ""), headers=token_headers, json_body=body or None)
-                    response.raise_for_status()
-                    resources[step.get("resource") or "created"] = response.json()
+                try:
+                    if step.get("action") == "register":
+                        user, token_headers = self._register_and_auth()
+                        resources["user"] = user
+                        resources[step.get("resource") or "user"] = user
+                    elif step.get("action") == "create":
+                        # 基础 body 由接口 schema 确定性构造，LLM overrides 只做覆盖，
+                        # 防止模型漏写必填字段导致 422
+                        base_body = _body_from_schema(self._schema_for(step.get("path", ""), step.get("method", "POST"))) or {}
+                        body = {**base_body, **resolve_placeholders(step.get("overrides") or {}, resources)}
+                        response = self._request(step.get("method", "POST"), step.get("path", ""), headers=token_headers, json_body=body or None)
+                        response.raise_for_status()
+                        resources[step.get("resource") or "created"] = response.json()
+                except (requests.RequestException, OSError) as exc:
+                    # 前置失败（如固定名撞上一轮残留）不是业务失败：如实记 inconclusive
+                    self._assert(assertions, "setup_available", False, True, False, f"setup step failed: {exc}")
+                    return _request_view("GET", "", {}), _response_view_of_none(), {}, {}
 
             db_assertions = [LLMDBAssertion.model_validate(item) for item in rule.get("db_assertions", [])]
             engine = DbAssertionEngine(db_assertions, resources, self.db)
             before_states = engine.capture_before()
 
-            action_path = resolve_placeholders(rule.get("action_path", ""), resources)
-            action_body = resolve_placeholders(rule.get("action_body", {}) or {}, resources)
+            action_path = path_template
+            action_body = resolve_placeholders(rule.get("action_params", {}) or {}, resources)
             response = self._request(method, action_path, headers=token_headers, json_body=action_body or None)
             self._assert(
                 assertions,
