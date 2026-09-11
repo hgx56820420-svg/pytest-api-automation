@@ -117,6 +117,7 @@ def make_workflow(
     runtime_document=None,
     max_repair_attempts: int = 2,
     failing_case_ids: list[str] | None = None,
+    adapter: str = "mini_shop",
 ) -> V2Workflow:
     """Build a V2Workflow with in-process OpenAPI loading and stub executor."""
     openapi_path = tmp_path / "openapi.json"
@@ -141,6 +142,7 @@ def make_workflow(
         database_url="sqlite:///./agent-test.db",
         runtime_openapi=str(runtime_path),
         max_repair_attempts=max_repair_attempts,
+        adapter=adapter,
         run_id=f"run-{uuid.uuid4().hex[:12]}",
     )
 
@@ -336,6 +338,54 @@ def test_coverage_review_rejects_case_without_executor_handler(monkeypatch):
     assert any("no executor scenario handler" in issue for issue in coverage.issues)
 
 
+def test_plan_cases_generates_generic_cases_for_unmapped_operations(monkeypatch):
+    """adapter 未预写场景的新接口，必须自动生成契约冒烟用例而不是裸奔。"""
+    from api_agent.adapters import DomainAdapter
+    from api_agent.database import DatabaseObserver
+    from api_agent.executor import ScenarioExecutor
+
+    fake = DomainAdapter(
+        name="fake",
+        scenarios={},
+        extra_cases=[],
+        executor_class=ScenarioExecutor,
+        observer_class=DatabaseObserver,
+    )
+    monkeypatch.setattr("api_agent.planner.get_adapter", lambda name=None: fake)
+    mini_shop_requirement = requirement()
+    cases = plan_cases(mini_shop_requirement, None, "fake")
+
+    assert len(cases.cases) == len(mini_shop_requirement.operations)
+    assert all(case.case_id.startswith("generic.") for case in cases.cases)
+    assert all(case.scenario == "generic" for case in cases.cases)
+    health = next(case for case in cases.cases if case.operation_id == "health_health_get")
+    assert health.expected_status_codes == [200]
+    assert "response_schema" in health.required_assertions
+
+
+def test_workflow_covers_new_operations_with_generic_cases(tmp_path: Path, monkeypatch):
+    """新增接口出现在契约里时，整条工作流要能用通用冒烟用例跑通并 PASS。"""
+    from api_agent.adapters import ADAPTERS, DomainAdapter
+    from api_agent.database import DatabaseObserver
+    from api_agent.executor import ScenarioExecutor
+
+    fake = DomainAdapter(
+        name="fake",
+        scenarios={},
+        extra_cases=[],
+        executor_class=ScenarioExecutor,
+        observer_class=DatabaseObserver,
+    )
+    monkeypatch.setitem(ADAPTERS, "fake", fake)
+    workflow = make_workflow(tmp_path, monkeypatch, adapter="fake")
+    result = workflow.invoke()
+
+    assert result["final_decision"] == "PASS"
+    cases = read_model(tmp_path / "artifacts" / "test-cases.json", TestCaseDocument)
+    assert len(cases.cases) == 22
+    assert all(case.case_id.startswith("generic.") for case in cases.cases)
+
+
 # ---------------------------------------------------------------------------
 # Full workflow (LangGraph) with in-process stubs
 # ---------------------------------------------------------------------------
@@ -387,24 +437,37 @@ def test_workflow_log_correlates_run_case_and_request(tmp_path: Path, monkeypatc
     assert logger.requests_for_case(case_records[0]["case_id"])
 
 
-def test_workflow_selectively_regenerates_affected_cases_on_breaking_contract(
+def test_workflow_escalates_breaking_contract_until_human_confirms(
     tmp_path: Path, monkeypatch
 ):
-    """A breaking contract change regenerates only the drifted operations."""
+    """P0：破坏性契约变化必须 NEEDS_HUMAN，人工确认（以新契约为基线重跑）后才恢复 PASS。"""
     drifted = deepcopy(app.openapi())
-    del drifted["paths"]["/api/inventory/{product_id}/transactions"]
+    # 破坏性变化：商品列表 200 响应结构被删（response_schema_changed）
+    drifted["paths"]["/api/products"]["get"]["responses"]["200"] = {"description": "OK"}
 
     workflow = make_workflow(tmp_path, monkeypatch, runtime_document=drifted)
     result = workflow.invoke()
 
-    assert result["final_decision"] == "PASS"
-    assert workflow.repair.history.repairs[0].trigger == "contract_breaking_change"
-    repair = workflow.repair.history.repairs[0]
-    assert repair.affected_case_ids, "removed operation must map to affected cases"
-    merged = read_model(tmp_path / "artifacts" / "test-cases.json", TestCaseDocument)
-    removed_operation_id = "transactions_api_inventory__product_id__transactions_get"
-    assert all(case.operation_id != removed_operation_id for case in merged.cases)
-    assert repair.diff, "regeneration must archive a diff"
+    assert result["final_decision"] == "NEEDS_HUMAN"
+    assert workflow.repair.history.escalated_to_human
+    assert any(r.trigger == "contract_breaking_change" for r in workflow.repair.history.repairs)
+
+    # 人工确认后：以当前契约为基线重新运行 → PASS
+    confirmed = V2Workflow(
+        output_dir=tmp_path / "artifacts-confirmed",
+        openapi_source=str(tmp_path / "runtime"),
+        requirements_md=REQUIREMENTS_MD,
+        base_url="http://127.0.0.1:8010",
+        database_url="sqlite:///./agent-test.db",
+        runtime_openapi=str(tmp_path / "runtime"),
+        max_repair_attempts=2,
+        adapter="mini_shop",
+        run_id=f"run-{uuid.uuid4().hex[:12]}",
+    )
+    result2 = confirmed.invoke()
+
+    assert result2["final_decision"] == "PASS"
+    assert not confirmed.repair.history.escalated_to_human
 
 
 def test_workflow_escalates_when_result_review_makes_no_progress(tmp_path: Path, monkeypatch):

@@ -556,6 +556,62 @@ class ScenarioExecutor:
         self._assert(assertions, "inventory_evidence", len(entries) >= 2 and entries[-2]["quantity_change"] == -2 and entries[-1]["quantity_change"] == 2, "-2 then +2", entries)
         return _request_view("GET", f"/api/inventory/{product['id']}/transactions", {}), _response_view(response), before, after
 
+    # -- generic contract smoke ------------------------------------------
+
+    def _scenario_generic(self, case, assertions):
+        """Schema-driven smoke for operations without a hand-written scenario.
+
+        请求由 OpenAPI schema 确定性构造（必填字段、长度、枚举、最小值），
+        需要认证则先注册登录。状态码判定：拒绝 5xx/3xx/未声明状态码，
+        容忍数据依赖的 4xx（FastAPI 不会把 HTTPException 的 401/404 写进
+        OpenAPI，通用请求命中它们属于正常数据依赖）；2xx 响应必须通过
+        契约结构校验。语义级回归由预写业务场景负责。
+        """
+        operation = self.operations.get(case.operation_id)
+        if operation is None:
+            self._assert(assertions, "operation_present", False, True, False, "operation spec missing")
+            return _request_view("GET", "", {}), _response_view_of_none(), {}, {}
+
+        path = operation.path
+        for param in operation.parameters:
+            if param.location == "path":
+                path = path.replace("{" + param.name + "}", str(_schema_value(param.schema_)))
+        query = {
+            param.name: _schema_value(param.schema_)
+            for param in operation.parameters
+            if param.location == "query" and param.required
+        }
+        headers = None
+        if operation.security_required:
+            _, headers = self._register_and_auth()
+        body = _body_from_schema(operation.request_schema)
+        response = self._request(operation.method, path, headers=headers, json_body=body, params=query or None)
+
+        documented = set(case.expected_status_codes)
+        status = response.status_code
+        accepted = status in documented or 400 <= status < 500
+        self._assert(
+            assertions,
+            "http_status",
+            accepted,
+            sorted(documented) or "2xx",
+            status,
+            "" if accepted else "5xx/3xx/undocumented status from a schema-valid request",
+        )
+        schema = operation.responses.get(str(status))
+        if schema and 200 <= status < 300:
+            try:
+                validate(response.json(), schema)
+                assertions.append(AssertionResult(name="response_schema", status="passed", expected="OpenAPI schema", actual="valid"))
+            except (ValidationError, ValueError) as exc:
+                assertions.append(AssertionResult(name="response_schema", status="failed", expected="OpenAPI schema", actual="invalid", detail=str(exc)))
+        return (
+            _request_view(operation.method, path, {"json_body": body, "params": query}),
+            _response_view(response),
+            {},
+            {},
+        )
+
     def _table_count(self, table: str) -> int:
         if table != "products":
             raise ValueError("unsupported table")
@@ -594,3 +650,59 @@ def _redact(value: Any) -> Any:
     if isinstance(value, list):
         return [_redact(child) for child in value]
     return value
+
+
+def _response_view_of_none() -> dict[str, Any]:
+    return {"status_code": None, "json": None}
+
+
+def _schema_value(schema: Any) -> Any:
+    """Deterministically fabricate one schema-valid value."""
+    if not isinstance(schema, dict):
+        return "test"
+    if "const" in schema:
+        return schema["const"]
+    enum = schema.get("enum")
+    if enum:
+        return enum[0]
+    value_type = schema.get("type")
+    if value_type == "integer":
+        if "minimum" in schema:
+            return int(schema["minimum"])
+        if "exclusiveMinimum" in schema:
+            return int(schema["exclusiveMinimum"]) + 1
+        return 1
+    if value_type == "number":
+        if "minimum" in schema:
+            return schema["minimum"]
+        if "exclusiveMinimum" in schema:
+            return schema["exclusiveMinimum"] + 0.5
+        return 1.0
+    if value_type == "boolean":
+        return True
+    if value_type == "array":
+        return [_schema_value(schema.get("items", {}))]
+    if value_type == "object":
+        return _body_from_schema(schema) or {}
+    # string：优先满足 minLength，pattern 约束用大写试探
+    min_length = int(schema.get("minLength", 0) or 0)
+    max_length = schema.get("maxLength")
+    if "pattern" in schema:
+        value = "TEST" if min_length <= 4 else "T" * min_length
+    else:
+        value = "test" if min_length <= 4 else "x" * min_length
+    if max_length and len(value) > int(max_length):
+        value = value[: int(max_length)]
+    return value
+
+
+def _body_from_schema(schema: Any) -> dict[str, Any] | None:
+    """Build a minimal request body from required properties only."""
+    if not isinstance(schema, dict):
+        return None
+    properties = schema.get("properties", {})
+    if not properties:
+        return None
+    required = schema.get("required") or list(properties.keys())
+    body = {name: _schema_value(properties[name]) for name in required if name in properties}
+    return body or None

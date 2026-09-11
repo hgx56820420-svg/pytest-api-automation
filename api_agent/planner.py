@@ -51,7 +51,32 @@ def plan_cases(
         if review and case.operation_id in review.operation_mapping:
             case.source_refs.append(f"requirement:{review.operation_mapping[case.operation_id]}")
         cases.append(case)
+    # 通用契约冒烟：adapter 未预写场景的接口也要有用例，新接口不允许裸奔
+    for operation in requirement.operations:
+        if operation.operation_id in adapter.scenarios:
+            continue
+        cases.append(_generic_case(operation))
     return TestCaseDocument(requirement_hash=requirement.source_hash, cases=cases)
+
+
+def _generic_case(operation) -> TestCase:
+    """Build a schema-driven contract smoke case for an unmapped operation.
+
+    期望状态码取接口文档声明的全部状态码：冒烟的价值在于抓 5xx 与
+    未声明的响应，而 4xx（数据依赖导致）由响应结构断言与业务用例兜底。
+    """
+    documented = [int(code) for code in operation.responses if code.isdigit()]
+    return TestCase(
+        case_id=f"generic.{operation.operation_id}",
+        operation_id=operation.operation_id,
+        title=f"契约冒烟: {operation.method} {operation.path}",
+        category="contract",
+        scenario="generic",
+        source_refs=[operation.source_ref, "generic:openapi"],
+        expected_status_codes=documented or [200],
+        required_assertions=["http_status", "response_schema"],
+        evidence_requirements=["http"],
+    )
 
 
 def review_coverage(
@@ -104,8 +129,14 @@ def review_coverage(
             issues.append(f"{operation.operation_id} is missing assertions: {', '.join(missing)}")
 
     if requirement_review and requirement_review.detected_scenarios:
+        known_scenarios = {values[0] for values in adapter.scenarios.values()} | {
+            case.scenario for case in adapter.extra_cases
+        }
         generated_scenarios = {case.scenario for case in document.cases}
-        missing_scenarios = sorted(set(requirement_review.detected_scenarios) - generated_scenarios)
+        # 只对 adapter 声明过能力的场景报警；文档里的跨领域措辞噪音不拦截流程
+        missing_scenarios = sorted(
+            (set(requirement_review.detected_scenarios) - generated_scenarios) & known_scenarios
+        )
         for scenario in missing_scenarios:
             issues.append(f"Requirement scenario is not generated: {scenario}")
 

@@ -473,13 +473,22 @@ class V2Workflow:
             update.update(self._trace(state, "contract_gate", report.status, "human"))
             update["route"] = "human"
         else:
+            # P0 修复：破坏性契约变化必须人工确认。选择性再生照常执行
+            # （保留再生能力），但本轮升级 NEEDS_HUMAN，人工确认后以当前
+            # 契约为基线重跑才会恢复 PASS——防止服务端误删接口被静默消化。
+            update.update(
+                self._escalate(
+                    state,
+                    "contract: breaking changes need human confirmation before the baseline is regenerated",
+                )
+            )
             update.update(
                 self._trace(
                     state,
                     "contract_gate",
                     report.status,
                     "regenerate_affected",
-                    f"{len(report.changes)} changes",
+                    f"{len(report.changes)} changes (escalated for human confirmation)",
                 )
             )
             update["route"] = "regenerate"
