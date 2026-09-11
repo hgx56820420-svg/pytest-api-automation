@@ -43,11 +43,17 @@ def is_llm_enabled() -> bool:
 
 def get_chat_model():
     """Build a LangChain ChatOpenAI bound to the configured gateway."""
+    import re
+
     from langchain_openai import ChatOpenAI
 
+    base = llm_setting("LLM_BASE_URL").rstrip("/")
+    # 已带版本段的网关（智谱 /v4、千帆 /v2 等）原样使用，否则补 OpenAI 默认 /v1
+    if not re.search(r"/v\d+$", base):
+        base += "/v1"
     return ChatOpenAI(
         api_key=llm_setting("LLM_API_KEY"),
-        base_url=llm_setting("LLM_BASE_URL").rstrip("/") + "/v1",
+        base_url=base,
         model=llm_setting("LLM_MODEL"),
         temperature=0,
         timeout=120,
