@@ -8,7 +8,6 @@ Pydantic 校验。LLM 只做"理解与拆解"，所有断言由确定性 DSL 引
 from __future__ import annotations
 
 import json
-import time
 
 from api_agent.llm_client import get_chat_model, llm_setting
 from api_agent.llm_rules import LLMRuleSet
@@ -97,7 +96,7 @@ def analyze_requirements(
     requirements_md,
     observable_tables: dict[str, str],
 ) -> tuple[LLMRuleSet, list[str]]:
-    """Call the LLM once and return validated rules (or raise)."""
+    """Run the LangGraph analyst subgraph and return validated rules."""
     text = requirements_md.read_text(encoding="utf-8-sig")
     if len(text) > MAX_DOC_CHARS:
         text = text[:MAX_DOC_CHARS] + "\n...(文档已截断)"
@@ -110,46 +109,14 @@ def analyze_requirements(
         f"# 可观察表白名单（db_assertions.table 只能用这些）\n{tables}\n"
     )
 
-    model = get_chat_model()
-    # 网关兼容性：function_calling 而不是 json_schema（OpenAI 专属强约束）
-    structured = model.with_structured_output(LLMRuleSet, method="function_calling")
+    from api_agent.analyst_graph import build_analyst_graph
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_prompt},
     ]
-    result = None
-    last_error: Exception | None = None
-    for attempt in range(1, 5):  # 免费档高峰期常见 429，耐心跨过限流窗口
-        try:
-            result = structured.invoke(messages)
-            if result is not None:
-                break
-        except Exception as exc:  # noqa: BLE001 - 记录最后一次错误后统一退避重试
-            last_error = exc
-        time.sleep(20 * attempt)
-    if result is None:
-        # 兜底 1：部分网关/模型不回工具调用，改走纯文本 JSON 再人工校验
-        for attempt in range(1, 4):
-            try:
-                raw = model.invoke(
-                    [
-                        {"role": "system", "content": SYSTEM_PROMPT + "\n只输出一个 JSON 对象，不要任何其他文字。"},
-                        {"role": "user", "content": user_prompt},
-                    ]
-                )
-                text = str(raw.content)
-                start, end = text.find("{"), text.rfind("}")
-                if start == -1 or end <= start:
-                    raise RuntimeError(f"LLM returned no structured output; raw text: {text[:200]}")
-                result = LLMRuleSet.model_validate_json(text[start : end + 1])
-                break
-            except Exception as exc:  # noqa: BLE001
-                last_error = exc
-                time.sleep(20 * attempt)
-    if result is None:
-        raise RuntimeError(f"LLM analysis failed after retries: {last_error}")
-    repairs = repair_resource_ids(result)
-    return result, repairs
+    result = build_analyst_graph(get_chat_model()).invoke({"messages": messages})
+    return LLMRuleSet.model_validate(result["rules"]), result["repairs"]
 
 
 def analyst_model_name() -> str:

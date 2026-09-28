@@ -57,5 +57,5 @@ def get_chat_model():
         model=llm_setting("LLM_MODEL"),
         temperature=0,
         timeout=180,
-        max_retries=6,  # 免费档高峰期常见 429，依赖 SDK 指数退避
+        max_retries=0,  # LangGraph RetryPolicy owns the single retry budget.
     )

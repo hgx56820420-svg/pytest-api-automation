@@ -14,6 +14,7 @@
 - **契约门禁**：基线与运行时 OpenAPI 比对，破坏性变化触发受影响用例的选择性再生
 - **证据链**：`run_id / case_id / operation_id / request_id` 四方关联，HTTP/数据库 before-after 快照、JSONL 日志、Allure 附件
 - **多被测对象**：adapter 插件机制，接入新服务只需注册一个 `DomainAdapter`，框架层零改动
+- **LangGraph 内核拆分**：独立图定义、checkpoint 状态与 reducer、模型重试/降级子图；Python API 支持断点恢复，详见 [内核说明](docs/LANGGRAPH_KERNEL.md)
 
 ## 架构
 
