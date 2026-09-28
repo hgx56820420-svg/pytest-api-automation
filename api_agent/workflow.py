@@ -6,10 +6,10 @@ agent instead of restarting the pipeline. Auto-repair is bounded; when the
 budget is exhausted or a repair makes no progress, the workflow escalates to
 a human review node (NEEDS_HUMAN).
 
-Node map (all deterministic today; an LLM-backed agent can replace any node
-without changing the graph):
+Topology lives in workflow_graph.py; checkpoint state/reducers live in
+graph_state.py. The optional LLM analyst is a nested LangGraph subgraph.
 
-    parse_requirement -> review_requirement -> design_cases
+    parse_requirement -> review_requirement -> analyze_requirements -> design_cases
         -> review_coverage -> generate_script -> review_script
         -> contract_gate -> execute -> review_results -> finalize
 """
@@ -19,9 +19,14 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any
 
-from langgraph.graph import END, START, StateGraph
+from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.base import BaseCheckpointSaver
+from langgraph.checkpoint.memory import InMemorySaver
+
+from api_agent.graph_state import V2State, repair_attempts
+from api_agent.workflow_graph import NODE_NAMES, build_workflow_graph
 
 from api_agent.adapters import get_adapter
 from api_agent.agentlog import AgentLogger
@@ -35,6 +40,8 @@ from api_agent.models import (
     CoverageReport,
     ExecutionReport,
     NormalizedRequirement,
+    RepairAction,
+    RepairHistory,
     RequirementReview,
     ResultReviewReport,
     ScriptReviewReport,
@@ -45,7 +52,7 @@ from api_agent.models import (
 from api_agent.openapi import canonical_hash, load_openapi, normalize_openapi
 from api_agent.pipeline import run as run_pipeline
 from api_agent.planner import plan_cases, review_coverage
-from api_agent.repair import RepairManager
+from api_agent.repair import RepairManager, make_repair_action
 from api_agent.requirement_parser import parse_requirements
 from api_agent.requirements import review_markdown_requirements
 from api_agent.result_review import review_execution_results
@@ -62,19 +69,6 @@ ARTIFACT_NAMES = [
     "result-review.json",
     "repair-history.json",
 ]
-
-
-class V2State(TypedDict, total=False):
-    """Shared LangGraph state: route drives conditional edges, the rest is trace."""
-
-    run_id: str
-    output_dir: str
-    route: str
-    steps: list[dict[str, Any]]
-    messages: list[dict[str, Any]]
-    issues: list[str]
-    prev_signatures: dict[str, str]
-    final_decision: str
 
 
 class V2Workflow:
@@ -94,7 +88,11 @@ class V2Workflow:
         fixed_accounts: bool = False,
         llm_analysis: bool = False,
         run_id: str,
+        checkpointer: BaseCheckpointSaver | None = None,
+        interrupt_before: list[str] | None = None,
     ):
+        if max_repair_attempts < 0:
+            raise ValueError("max_repair_attempts must be non-negative")
         self.output_dir = output_dir
         self.openapi_source = openapi_source
         self.requirements_md = requirements_md
@@ -105,76 +103,93 @@ class V2Workflow:
         self.fixed_accounts = fixed_accounts
         self.llm_analysis = llm_analysis
         self.run_id = run_id
-        self.repair = RepairManager(output_dir, max_repair_attempts)
+        self.max_repair_attempts = max_repair_attempts
+        self.checkpointer = checkpointer if checkpointer is not None else InMemorySaver()
+        self.interrupt_before = interrupt_before
+        self.settings_hash = canonical_hash({
+            "output_dir": str(output_dir.resolve()),
+            "openapi_source": openapi_source,
+            "requirements_md": str(requirements_md.resolve()),
+            "base_url": base_url, "database_url": database_url,
+            "runtime_openapi": self.runtime_openapi, "adapter": adapter,
+            "fixed_accounts": fixed_accounts, "llm_analysis": llm_analysis,
+            "max_repair_attempts": max_repair_attempts,
+        })
         self.logger = AgentLogger(output_dir / "evidence" / run_id / "agent-log.jsonl", run_id)
         self.graph = self._build_graph()
 
     # -- graph assembly -----------------------------------------------------
 
     def _build_graph(self) -> Any:
-        """Wire agent nodes with conditional review/retry/human edges."""
-        graph = StateGraph(V2State)
-        graph.add_node("parse_requirement", self.parse_requirement)
-        graph.add_node("review_requirement", self.review_requirement)
-        graph.add_node("analyze_requirements", self.analyze_requirements)
-        graph.add_node("design_cases", self.design_cases)
-        graph.add_node("review_coverage", self.review_coverage)
-        graph.add_node("generate_script", self.generate_script)
-        graph.add_node("review_script", self.review_script)
-        graph.add_node("contract_gate", self.contract_gate)
-        graph.add_node("regenerate_affected", self.regenerate_affected)
-        graph.add_node("execute", self.execute)
-        graph.add_node("review_results", self.review_results)
-        graph.add_node("finalize", self.finalize)
+        graph = build_workflow_graph({name: getattr(self, name) for name in NODE_NAMES})
+        return graph.compile(
+            checkpointer=self.checkpointer,
+            interrupt_before=self.interrupt_before,
+            name="api-agent-v2",
+        )
 
-        graph.add_edge(START, "parse_requirement")
-        graph.add_edge("parse_requirement", "review_requirement")
-        graph.add_conditional_edges(
-            "review_requirement",
-            lambda state: state["route"],
-            {"approved": "analyze_requirements", "retry": "parse_requirement", "human": "finalize"},
-        )
-        graph.add_edge("analyze_requirements", "design_cases")
-        graph.add_edge("design_cases", "review_coverage")
-        graph.add_conditional_edges(
-            "review_coverage",
-            lambda state: state["route"],
-            {"approved": "generate_script", "retry": "design_cases", "human": "finalize"},
-        )
-        graph.add_edge("generate_script", "review_script")
-        graph.add_conditional_edges(
-            "review_script",
-            lambda state: state["route"],
-            {"approved": "contract_gate", "retry": "generate_script", "human": "finalize"},
-        )
-        graph.add_conditional_edges(
-            "contract_gate",
-            lambda state: state["route"],
-            {"continue": "execute", "regenerate": "regenerate_affected", "human": "finalize"},
-        )
-        graph.add_edge("regenerate_affected", "contract_gate")
-        graph.add_edge("execute", "review_results")
-        graph.add_conditional_edges(
-            "review_results",
-            lambda state: state["route"],
-            {"approved": "finalize", "retry": "execute", "human": "finalize"},
-        )
-        graph.add_edge("finalize", END)
-        return graph.compile()
+    def _config(self, config: RunnableConfig | None = None) -> RunnableConfig:
+        merged = dict(config or {})
+        configurable = dict(merged.get("configurable", {}))
+        if configurable.get("thread_id", self.run_id) != self.run_id:
+            raise ValueError("thread_id must equal run_id (artifact/evidence identity)")
+        if configurable.get("checkpoint_id") or configurable.get("checkpoint_ns"):
+            raise ValueError("V2Workflow resumes the latest root checkpoint only")
+        configurable["thread_id"] = self.run_id
+        merged["configurable"] = configurable
+        # A repair can revisit up to the full path. Budget > 2 must not hit
+        # LangGraph's default recursion limit unexpectedly.
+        merged.setdefault("recursion_limit", len(NODE_NAMES) * (self.max_repair_attempts + 2))
+        return merged
 
-    def invoke(self, initial_state: V2State | None = None) -> dict[str, Any]:
-        """Run the graph and return the final merged state."""
+    @property
+    def repair(self) -> RepairManager:
+        """Compatibility snapshot; nodes never use it as execution state."""
+        state = self.graph.get_state(self._config()).values
+        manager = RepairManager(self.output_dir, self.max_repair_attempts)
+        manager.history = self._repair_history(state)
+        return manager
+
+    def resume(self, *, config: RunnableConfig | None = None) -> dict[str, Any]:
+        """Resume the latest checkpoint with the same settings and artifacts.
+
+        External HTTP side effects are not rolled back by a checkpoint.
+        """
+        config = self._config(config)
+        snapshot = self.graph.get_state(config)
+        if not snapshot.values:
+            raise ValueError("No checkpoint exists for this run_id")
+        if snapshot.values.get("settings_hash") != self.settings_hash:
+            raise ValueError("Workflow settings differ from the checkpoint")
+        if not snapshot.next:
+            return dict(snapshot.values)
+        return self.graph.invoke(None, config=config)
+
+    def invoke(
+        self,
+        initial_state: V2State | None = None,
+        *,
+        config: RunnableConfig | None = None,
+    ) -> dict[str, Any]:
+        """Start a new run; use resume() to continue an existing checkpoint."""
+        config = self._config(config)
+        if self.graph.get_state(config).values:
+            raise ValueError("run_id already has a checkpoint; use resume() or a new run_id")
         state: V2State = {
             "run_id": self.run_id,
             "output_dir": str(self.output_dir),
-            "steps": [],
-            "messages": [],
-            "issues": [],
-            "prev_signatures": {},
+            "settings_hash": self.settings_hash,
+            "max_repair_attempts": self.max_repair_attempts,
+            "steps": [], "messages": [], "issues": [],
+            "prev_signatures": {}, "repair_history": [],
+            "repair_escalated": False, "llm_rules": None,
         }
         if initial_state:
+            for key in ("run_id", "output_dir", "settings_hash", "max_repair_attempts"):
+                if key in initial_state and initial_state[key] != state[key]:
+                    raise ValueError(f"initial_state cannot override {key}")
             state.update(initial_state)
-        return self.graph.invoke(state)
+        return self.graph.invoke(state, config=config)
 
     # -- shared helpers -----------------------------------------------------
 
@@ -193,12 +208,12 @@ class V2Workflow:
         )
         record = StepTrace(
             step=step,
-            attempt=self.repair.attempts + 1,
+            attempt=repair_attempts(state) + 1,
             decision=decision,
             routed_to=routed_to,
             detail=detail,
         ).model_dump()
-        return {"steps": state.get("steps", []) + [record]}
+        return {"steps": [record]}
 
     def _message(
         self,
@@ -225,54 +240,63 @@ class V2Workflow:
             agent=from_agent,
             detail={"to": to_agent, "topic": topic, "payload_ref": payload_ref, "decision": decision},
         )
-        return {"messages": state.get("messages", []) + [message.model_dump()]}
+        return {"messages": [message.model_dump()]}
+
+    def _repair_history(self, state: V2State) -> RepairHistory:
+        return RepairHistory(
+            max_repair_attempts=self.max_repair_attempts,
+            repairs=state.get("repair_history", []),
+            escalated_to_human=state.get("repair_escalated", False),
+        )
+
+    def _archive_repair(self, state: V2State, update: dict[str, Any]) -> dict[str, Any]:
+        """Export a state projection for audit, not runtime storage."""
+        projected = {
+            **state, **update,
+            "repair_history": state.get("repair_history", []) + update.get("repair_history", []),
+        }
+        write_model(self.output_dir / "repair-history.json", self._repair_history(projected))
+        return update
+
+    def _record_repair(self, state: V2State, **kwargs: Any) -> dict[str, Any]:
+        action = make_repair_action(attempt=repair_attempts(state) + 1, **kwargs)
+        return self._archive_repair(state, {"repair_history": [action.model_dump()]})
 
     def _escalate(self, state: V2State, reason: str) -> dict[str, Any]:
-        self.repair.escalate(reason)
-        return {"issues": state.get("issues", []) + [reason]}
+        action = RepairAction(
+            attempt=repair_attempts(state), trigger=reason, target_step="human_review",
+        )
+        return self._archive_repair(state, {
+            "issues": [reason], "repair_escalated": True,
+            "repair_history": [action.model_dump()],
+        })
 
     def _repair_route(
-        self,
-        state: V2State,
-        *,
-        loop_key: str,
-        artifact: Path,
-        trigger: str,
-        target_step: str,
-        signature: str | None = None,
+        self, state: V2State, *, loop_key: str, artifact: Path,
+        trigger: str, target_step: str, signature: str | None = None,
     ) -> dict[str, Any]:
-        """Decide retry vs human for a failed review, with bounded attempts.
-
-        A retry that reproduces the exact previous result (no progress)
-        escalates immediately instead of burning the remaining budget.
-        Returns the node update carrying the route and remembered signatures.
-        """
+        """Domain repair policy; all decisions read checkpointed state."""
         current_signature = signature or _file_hash(artifact)
         previous = state.get("prev_signatures", {}).get(loop_key)
-        signatures = dict(state.get("prev_signatures", {}))
-        update: dict[str, Any] = {"prev_signatures": signatures}
         if previous is not None and previous == current_signature:
-            update.update(self._escalate(state, f"{loop_key}: repair produced no progress"))
-            update["route"] = "human"
-            return update
-        if self.repair.exhausted:
-            update.update(
-                self._escalate(
-                    state,
-                    f"{loop_key}: max repair attempts ({self.repair.history.max_repair_attempts}) reached",
-                )
-            )
-            update["route"] = "human"
-            return update
-        self.repair.record(
-            trigger=trigger,
-            target_step=target_step,
+            return {
+                **self._escalate(state, f"{loop_key}: repair produced no progress"),
+                "route": "human",
+            }
+        if repair_attempts(state) >= self.max_repair_attempts:
+            return {
+                **self._escalate(state, f"{loop_key}: max repair attempts ({self.max_repair_attempts}) reached"),
+                "route": "human",
+            }
+        update = self._record_repair(
+            state, trigger=trigger, target_step=target_step,
             before={"previous_signature": previous} if previous is not None else {},
             after=_read_json(artifact) or {},
         )
-        signatures[loop_key] = current_signature
-        update["route"] = "retry"
-        return update
+        return {
+            **update, "route": "retry",
+            "prev_signatures": {**state.get("prev_signatures", {}), loop_key: current_signature},
+        }
 
     # -- agents -------------------------------------------------------------
 
@@ -310,14 +334,14 @@ class V2Workflow:
         update = self._message(
             state,
             "requirement_reviewer",
-            "case_designer" if approved else "requirement_parser",
+            "requirement_analyst" if approved else "requirement_parser",
             "requirement_review",
             str(self.output_dir / "requirement-review.json"),
             review.decision,
             review.issues,
         )
         if approved:
-            update.update(self._trace(state, "review_requirement", "approved", "design_cases"))
+            update.update(self._trace(state, "review_requirement", "approved", "analyze_requirements"))
             update["route"] = "approved"
         else:
             route_update = self._repair_route(
@@ -376,22 +400,21 @@ class V2Workflow:
                     str(self.output_dir / "llm-rules.json"),
                 )
             )
-            return update
+            return {**update, "llm_rules": rules_doc}
         except Exception as exc:  # LLM 失败不阻断确定性覆盖，只记录问题
             update = self._trace(state, "analyze_requirements", "llm_error", "design_cases", f"{type(exc).__name__}: {exc}")
-            return {"issues": state.get("issues", []) + [f"llm analysis failed: {type(exc).__name__}: {exc}"], **update}
+            return {"issues": [f"llm analysis failed: {type(exc).__name__}: {exc}"], "llm_rules": None, **update}
 
     def design_cases(self, state: V2State) -> dict[str, Any]:
         """Case Design Agent: plan the standard case JSON from the baseline."""
         requirement = read_model(self.output_dir / "normalized-requirement.json", NormalizedRequirement)
         requirement_review = read_model(self.output_dir / "requirement-review.json", RequirementReview)
         cases = plan_cases(requirement, requirement_review, self.adapter)
-        rules_path = self.output_dir / "llm-rules.json"
-        if rules_path.exists():
+        if state.get("llm_rules") is not None:
             from api_agent.llm_rules import LLMRuleSet
             from api_agent.planner import compile_llm_cases
 
-            rule_set = LLMRuleSet.model_validate_json(rules_path.read_text(encoding="utf-8"))
+            rule_set = LLMRuleSet.model_validate(state["llm_rules"])
             cases.cases.extend(compile_llm_cases(rule_set))
         write_model(self.output_dir / "test-cases.json", cases)
         update = self._trace(state, "case_designer", "done", "review_coverage", f"{len(cases.cases)} cases")
@@ -520,7 +543,7 @@ class V2Workflow:
         if report.decision == "continue":
             update.update(self._trace(state, "contract_gate", report.status, "execute"))
             update["route"] = "continue"
-        elif self.repair.exhausted:
+        elif repair_attempts(state) >= self.max_repair_attempts:
             update.update(
                 self._escalate(state, "contract: max repair attempts reached on breaking changes")
             )
@@ -577,7 +600,8 @@ class V2Workflow:
         affected_case_ids = sorted(
             {case.case_id for case in old_cases.cases if case.operation_id in affected_operations}
         )
-        self.repair.record(
+        repair_update = self._record_repair(
+            state,
             trigger="contract_breaking_change",
             target_step="plan_cases",
             before=before,
@@ -588,7 +612,7 @@ class V2Workflow:
             f"regenerated {len(regenerated)} cases "
             f"for {len(affected_operations)} drifted operations"
         )
-        update = self._trace(state, "regenerate_affected", "done", "contract_gate", detail)
+        update = {**repair_update, **self._trace(state, "regenerate_affected", "done", "contract_gate", detail)}
         update.update(
             self._message(
                 state,
@@ -603,6 +627,9 @@ class V2Workflow:
 
     def execute(self, state: V2State) -> dict[str, Any]:
         """Executor Agent: run generated tests and collect evidence."""
+        # Always refresh the execution rules from this run's checkpoint.
+        # A reused artifact directory must never reactivate an older LLM run.
+        write_json(self.output_dir / "llm-rules.json", state.get("llm_rules") or {"rules": []})
         report, returncode = run_pipeline(
             self.output_dir,
             self.base_url,
@@ -671,14 +698,13 @@ class V2Workflow:
 
     def finalize(self, state: V2State) -> dict[str, Any]:
         """Finalize: map review outcomes to PASS/FAIL/NEEDS_HUMAN and archive."""
-        escalated = self.repair.history.escalated_to_human
+        escalated = state.get("repair_escalated", False)
+        write_model(self.output_dir / "repair-history.json", self._repair_history(state))
         failed_cases = 0
-        inconclusive_cases = 0
         approved = False
         current_review = self._current_run_result_review()
         if current_review is not None:
             failed_cases = current_review.failed
-            inconclusive_cases = current_review.inconclusive
             approved = current_review.decision == "approved"
 
         if approved and not escalated:
@@ -697,7 +723,7 @@ class V2Workflow:
         steps = state.get("steps", []) + [
             StepTrace(
                 step="finalize",
-                attempt=self.repair.attempts + 1,
+                attempt=repair_attempts(state) + 1,
                 decision=decision,
                 routed_to="END",
             ).model_dump()
@@ -706,7 +732,7 @@ class V2Workflow:
             run_id=self.run_id,
             finished_at=datetime.now(timezone.utc).isoformat(),
             decision=decision,
-            max_repair_attempts=self.repair.history.max_repair_attempts,
+            max_repair_attempts=self.max_repair_attempts,
             steps=steps,
             artifacts=artifacts,
             issues=state.get("issues", []),
@@ -714,7 +740,7 @@ class V2Workflow:
         write_model(self.output_dir / "workflow-report.json", workflow_report)
         if decision != "PASS":
             self._preserve_failure_scene(state, decision)
-        return {"steps": steps, "final_decision": decision}
+        return {"steps": steps[-1:], "final_decision": decision}
 
     def write_error_report(self, exc: BaseException) -> WorkflowRunReport:
         """Write a degraded report when the graph itself raises.
@@ -724,14 +750,15 @@ class V2Workflow:
         """
         reason = f"workflow crashed: {type(exc).__name__}: {exc}"
         self.logger.log("step", agent="workflow", level="error", detail={"error": reason})
-        self.repair.escalate(reason)
+        state = self.graph.get_state(self._config()).values
+        update = self._escalate(state, reason)
         workflow_report = WorkflowRunReport(
             run_id=self.run_id,
             finished_at=datetime.now(timezone.utc).isoformat(),
             decision="NEEDS_HUMAN",
-            max_repair_attempts=self.repair.history.max_repair_attempts,
-            steps=[],
-            issues=[reason],
+            max_repair_attempts=self.max_repair_attempts,
+            steps=state.get("steps", []),
+            issues=state.get("issues", []) + update["issues"],
         )
         write_model(self.output_dir / "workflow-report.json", workflow_report)
         scene = {
@@ -769,7 +796,7 @@ class V2Workflow:
         scene = {
             "run_id": self.run_id,
             "decision": decision,
-            "escalated_to_human": self.repair.history.escalated_to_human,
+            "escalated_to_human": state.get("repair_escalated", False),
             "issues": state.get("issues", []),
             "failed_cases": failed,
             "evidence_dir": str((self.output_dir / "evidence" / self.run_id).resolve()),

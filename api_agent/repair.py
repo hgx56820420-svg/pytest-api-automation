@@ -10,6 +10,21 @@ from typing import Any
 from api_agent.models import RepairAction, RepairHistory
 
 
+def make_repair_action(
+    *, attempt: int, trigger: str, target_step: str,
+    before: dict[str, Any], after: dict[str, Any],
+    affected_case_ids: list[str] | None = None,
+) -> RepairAction:
+    """Build an audit record without owning execution state or writing files."""
+    return RepairAction(
+        attempt=attempt, trigger=trigger, target_step=target_step,
+        affected_case_ids=affected_case_ids or [],
+        before_summary={"hash": _hash(before), **_summary(before)},
+        after_summary={"hash": _hash(after), **_summary(after)},
+        diff=_diff(before, after),
+    )
+
+
 class RepairManager:
     """Track repair attempts for one workflow run.
 
@@ -25,7 +40,10 @@ class RepairManager:
 
     @property
     def attempts(self) -> int:
-        return len(self.history.repairs)
+        # Human escalation is an outcome, not an automatic repair attempt.
+        # Keeping this distinction makes the budget meaningful when a node
+        # escalates immediately after detecting no progress.
+        return sum(action.target_step != "human_review" for action in self.history.repairs)
 
     @property
     def exhausted(self) -> bool:
@@ -40,14 +58,13 @@ class RepairManager:
         affected_case_ids: list[str] | None = None,
     ) -> RepairAction:
         """Archive one repair attempt with hashes, summaries and a unified diff."""
-        action = RepairAction(
+        action = make_repair_action(
             attempt=self.attempts + 1,
             trigger=trigger,
             target_step=target_step,
             affected_case_ids=affected_case_ids or [],
-            before_summary={"hash": _hash(before), **_summary(before)},
-            after_summary={"hash": _hash(after), **_summary(after)},
-            diff=_diff(before, after),
+            before=before,
+            after=after,
         )
         self.history.repairs.append(action)
         self.save()
@@ -58,7 +75,7 @@ class RepairManager:
         self.history.escalated_to_human = True
         self.history.repairs.append(
             RepairAction(
-                attempt=self.attempts + 1,
+                attempt=self.attempts,
                 trigger=reason or "escalated_to_human",
                 target_step="human_review",
                 before_summary={},

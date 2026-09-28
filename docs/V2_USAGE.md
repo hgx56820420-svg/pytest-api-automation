@@ -16,7 +16,7 @@ V2 在 V1 确定性闭环的基础上，引入 **LangGraph 编排的多 Agent �
   -> 收尾              决策 + 失败现场保留                    -> workflow-report.json
 ```
 
-Agent 之间只传递经过 Pydantic 校验的消息信封（`AgentMessage`：`from/to/topic/payload_ref/payload_hash`），payload 以产物文件为引用，可独立审计。所有节点当前为确定性实现；后续接入 LLM 时，只需把对应节点内部替换为 LangChain 结构化调用，图结构不变。
+Agent 之间传递经过 Pydantic 校验的消息信封（`AgentMessage`：`from/to/topic/payload_ref/payload_hash`），业务产物以文件引用传递，可独立审计。需求审核后可启用 LLM 需求分析子图；历史事件、修复状态和当前运行的 LLM 规则由 LangGraph checkpoint 管理。图定义、状态/reducer、节点工具与模型重试已拆分，详见 [LangGraph 内核说明](LANGGRAPH_KERNEL.md)。
 
 ## 1. 启动独立测试服务
 
@@ -77,6 +77,7 @@ artifacts/v2/
 - 自动修复默认最多 2 次（`--max-repair-attempts`）。
 - 修复重跑后产物签名与上次相同（无进展）时立即转人工，不烧完预算。
 - 每次修复在 `repair-history.json` 留档 attempt、trigger、before/after 摘要和 unified diff。
+- 转人工也是审计记录，但不消耗自动修复预算；运行时预算和无进展签名从图状态读取。
 - 超限后工作流决策为 `NEEDS_HUMAN`，等待人工审核后再继续。
 
 ### 契约变化的选择性再生
