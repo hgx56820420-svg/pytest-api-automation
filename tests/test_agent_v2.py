@@ -450,25 +450,32 @@ def test_workflow_escalates_breaking_contract_until_human_confirms(
     result = workflow.invoke()
 
     assert result["final_decision"] == "NEEDS_HUMAN"
+    assert result["workflow_status"] == "WAITING_HUMAN"
+    assert workflow.pending_interrupt() is not None
     assert workflow.repair.history.escalated_to_human
     assert any(r.trigger == "contract_breaking_change" for r in workflow.repair.history.repairs)
 
-    # 人工确认后：以当前契约为基线重新运行 → PASS
-    confirmed = V2Workflow(
-        output_dir=tmp_path / "artifacts-confirmed",
-        openapi_source=str(tmp_path / "runtime"),
+    # 关闭原实例后，用相同 run_id/输出目录从 SQLite checkpoint 的 interrupt
+    # 断点恢复，验证恢复不依赖原 Python 对象仍在内存中。
+    run_id = workflow.run_id
+    workflow.close()
+    resumed_workflow = V2Workflow(
+        output_dir=tmp_path / "artifacts",
+        openapi_source=str(tmp_path / "openapi.json"),
         requirements_md=REQUIREMENTS_MD,
         base_url="http://127.0.0.1:8010",
         database_url="sqlite:///./agent-test.db",
         runtime_openapi=str(tmp_path / "runtime"),
         max_repair_attempts=2,
         adapter="mini_shop",
-        run_id=f"run-{uuid.uuid4().hex[:12]}",
+        run_id=run_id,
     )
-    result2 = confirmed.invoke()
+    result2 = resumed_workflow.resume({"action": "approve", "comment": "确认契约变更"})
 
     assert result2["final_decision"] == "PASS"
-    assert not confirmed.repair.history.escalated_to_human
+    assert result2["workflow_status"] == "COMPLETED"
+    assert not resumed_workflow.repair.history.escalated_to_human
+    resumed_workflow.close()
 
 
 def test_workflow_escalates_when_result_review_makes_no_progress(tmp_path: Path, monkeypatch):
@@ -477,7 +484,9 @@ def test_workflow_escalates_when_result_review_makes_no_progress(tmp_path: Path,
     workflow = make_workflow(tmp_path, monkeypatch, failing_case_ids=[failing_case])
     result = workflow.invoke()
 
-    assert result["final_decision"] == "FAIL"
+    assert result["final_decision"] == "NEEDS_HUMAN"
+    assert result["workflow_status"] == "WAITING_HUMAN"
+    assert workflow.pending_interrupt() is not None
     assert workflow.repair.history.escalated_to_human
     assert (tmp_path / "artifacts" / "failure-scene.json").exists()
     scene = json.loads((tmp_path / "artifacts" / "failure-scene.json").read_text(encoding="utf-8"))
@@ -511,7 +520,12 @@ def test_workflow_requires_human_when_reviews_never_pass(tmp_path: Path, monkeyp
     result = workflow.invoke()
 
     assert result["final_decision"] == "NEEDS_HUMAN"
+    assert result["workflow_status"] == "WAITING_HUMAN"
+    assert workflow.pending_interrupt() is not None
     assert workflow.repair.history.escalated_to_human
+    resumed = workflow.resume({"action": "reject", "comment": "需求文档需要人工修订"})
+    assert resumed["final_decision"] == "NEEDS_HUMAN"
+    assert resumed["workflow_status"] == "COMPLETED"
     report = json.loads((tmp_path / "artifacts" / "workflow-report.json").read_text(encoding="utf-8"))
     assert report["decision"] == "NEEDS_HUMAN"
 

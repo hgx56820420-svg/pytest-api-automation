@@ -17,11 +17,14 @@ without changing the graph):
 from __future__ import annotations
 
 import json
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TypedDict
 
+from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command, interrupt
 
 from api_agent.adapters import get_adapter
 from api_agent.agentlog import AgentLogger
@@ -34,6 +37,7 @@ from api_agent.models import (
     ContractDiffReport,
     CoverageReport,
     ExecutionReport,
+    HumanReviewDecision,
     NormalizedRequirement,
     RequirementReview,
     ResultReviewReport,
@@ -61,6 +65,8 @@ ARTIFACT_NAMES = [
     "execution-report.json",
     "result-review.json",
     "repair-history.json",
+    "human-review.json",
+    "workflow-checkpoints.sqlite3",
 ]
 
 
@@ -74,6 +80,11 @@ class V2State(TypedDict, total=False):
     messages: list[dict[str, Any]]
     issues: list[str]
     prev_signatures: dict[str, str]
+    pending_repairs: dict[str, dict[str, Any]]
+    pending_human_review: dict[str, Any]
+    human_approved: bool
+    human_rejected: bool
+    workflow_status: str
     final_decision: str
 
 
@@ -105,9 +116,22 @@ class V2Workflow:
         self.fixed_accounts = fixed_accounts
         self.llm_analysis = llm_analysis
         self.run_id = run_id
-        self.repair = RepairManager(output_dir, max_repair_attempts)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.repair = RepairManager(output_dir, max_repair_attempts, run_id=run_id)
         self.logger = AgentLogger(output_dir / "evidence" / run_id / "agent-log.jsonl", run_id)
+        self.checkpoint_path = output_dir / "workflow-checkpoints.sqlite3"
+        self._checkpoint_connection = sqlite3.connect(
+            str(self.checkpoint_path), check_same_thread=False
+        )
+        self.checkpointer = SqliteSaver(self._checkpoint_connection)
+        self.checkpointer.setup()
         self.graph = self._build_graph()
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
 
     # -- graph assembly -----------------------------------------------------
 
@@ -125,6 +149,7 @@ class V2Workflow:
         graph.add_node("regenerate_affected", self.regenerate_affected)
         graph.add_node("execute", self.execute)
         graph.add_node("review_results", self.review_results)
+        graph.add_node("human_review", self.human_review)
         graph.add_node("finalize", self.finalize)
 
         graph.add_edge(START, "parse_requirement")
@@ -132,35 +157,51 @@ class V2Workflow:
         graph.add_conditional_edges(
             "review_requirement",
             lambda state: state["route"],
-            {"approved": "analyze_requirements", "retry": "parse_requirement", "human": "finalize"},
+            {"approved": "analyze_requirements", "retry": "parse_requirement", "human": "human_review"},
         )
         graph.add_edge("analyze_requirements", "design_cases")
         graph.add_edge("design_cases", "review_coverage")
         graph.add_conditional_edges(
             "review_coverage",
             lambda state: state["route"],
-            {"approved": "generate_script", "retry": "design_cases", "human": "finalize"},
+            {"approved": "generate_script", "retry": "design_cases", "human": "human_review"},
         )
         graph.add_edge("generate_script", "review_script")
         graph.add_conditional_edges(
             "review_script",
             lambda state: state["route"],
-            {"approved": "contract_gate", "retry": "generate_script", "human": "finalize"},
+            {"approved": "contract_gate", "retry": "generate_script", "human": "human_review"},
         )
         graph.add_conditional_edges(
             "contract_gate",
             lambda state: state["route"],
-            {"continue": "execute", "regenerate": "regenerate_affected", "human": "finalize"},
+            {"continue": "execute", "regenerate": "regenerate_affected", "human": "human_review"},
         )
         graph.add_edge("regenerate_affected", "contract_gate")
         graph.add_edge("execute", "review_results")
         graph.add_conditional_edges(
             "review_results",
             lambda state: state["route"],
-            {"approved": "finalize", "retry": "execute", "human": "finalize"},
+            {"approved": "finalize", "retry": "execute", "human": "human_review"},
+        )
+        graph.add_conditional_edges(
+            "human_review",
+            lambda state: state["route"],
+            {
+                "parse_requirement": "parse_requirement",
+                "design_cases": "design_cases",
+                "generate_script": "generate_script",
+                "regenerate_affected": "regenerate_affected",
+                "execute": "execute",
+                "finalize": "finalize",
+            },
         )
         graph.add_edge("finalize", END)
-        return graph.compile()
+        return graph.compile(checkpointer=self.checkpointer)
+
+    def _close_after_result(self, result: dict[str, Any]) -> dict[str, Any]:
+        """Return a graph result while retaining the connection for resume."""
+        return result
 
     def invoke(self, initial_state: V2State | None = None) -> dict[str, Any]:
         """Run the graph and return the final merged state."""
@@ -171,10 +212,47 @@ class V2Workflow:
             "messages": [],
             "issues": [],
             "prev_signatures": {},
+            "pending_repairs": {},
+            "human_approved": False,
+            "human_rejected": False,
         }
         if initial_state:
             state.update(initial_state)
-        return self.graph.invoke(state)
+        result = self.graph.invoke(state, config=self._config())
+        if self.pending_interrupt() is not None:
+            result["workflow_status"] = "WAITING_HUMAN"
+            result["final_decision"] = "NEEDS_HUMAN"
+        else:
+            result["workflow_status"] = "COMPLETED"
+        return result
+
+    def resume(self, decision: HumanReviewDecision | dict[str, Any]) -> dict[str, Any]:
+        """Resume the same run after ``human_review`` interrupted it."""
+        if isinstance(decision, HumanReviewDecision):
+            value = decision.model_dump()
+        else:
+            value = HumanReviewDecision.model_validate(decision).model_dump()
+        result = self.graph.invoke(Command(resume=value), config=self._config())
+        if self.pending_interrupt() is not None:
+            result["workflow_status"] = "WAITING_HUMAN"
+            result["final_decision"] = "NEEDS_HUMAN"
+        else:
+            result["workflow_status"] = "COMPLETED"
+        return result
+
+    def close(self) -> None:
+        """Close the SQLite checkpoint connection owned by this workflow."""
+        if self._checkpoint_connection is not None:
+            self._checkpoint_connection.close()
+            self._checkpoint_connection = None
+
+    def _config(self) -> dict[str, Any]:
+        return {"configurable": {"thread_id": self.run_id}}
+
+    def pending_interrupt(self) -> Any:
+        """Return the persisted interrupt payload, if this run is paused."""
+        snapshot = self.graph.get_state(self._config())
+        return snapshot.interrupts[0] if snapshot.interrupts else None
 
     # -- shared helpers -----------------------------------------------------
 
@@ -229,7 +307,164 @@ class V2Workflow:
 
     def _escalate(self, state: V2State, reason: str) -> dict[str, Any]:
         self.repair.escalate(reason)
-        return {"issues": state.get("issues", []) + [reason]}
+        pending = {
+            "reason": reason,
+            "source_step": "workflow",
+            "resume_target": "finalize",
+            "kind": "review",
+        }
+        return {
+            "issues": state.get("issues", []) + [reason],
+            "pending_human_review": pending,
+        }
+
+    @staticmethod
+    def _repair_target(target_step: str) -> str:
+        """Translate repair bookkeeping names into graph node names."""
+        return {
+            "parse_requirement": "parse_requirement",
+            "plan_cases": "design_cases",
+            "generate_script": "generate_script",
+            "rerun_failed": "execute",
+            "regenerate_affected": "regenerate_affected",
+        }.get(target_step, "finalize")
+
+    def _escalate_for_human(
+        self,
+        state: V2State,
+        reason: str,
+        *,
+        source_step: str,
+        resume_target: str,
+        kind: str = "review",
+    ) -> dict[str, Any]:
+        """Persist the human question context before entering ``interrupt``."""
+        update = self._escalate(state, reason)
+        update["pending_human_review"] = {
+            "reason": reason,
+            "source_step": source_step,
+            "resume_target": resume_target,
+            "kind": kind,
+            "options": ["approve", "retry", "reject"],
+            "artifacts": {
+                name: str(self.output_dir / name)
+                for name in ARTIFACT_NAMES
+                if (self.output_dir / name).exists()
+            },
+        }
+        write_json(
+            self.output_dir / "human-review.json",
+            {
+                "run_id": self.run_id,
+                "status": "waiting",
+                "request": update["pending_human_review"],
+            },
+        )
+        # ``interrupt`` stops before ``finalize`` runs, so preserve the
+        # failure scene now rather than losing the evidence index while the
+        # run is waiting for a human.
+        self._preserve_failure_scene(state, "NEEDS_HUMAN")
+        return update
+
+    def human_review(self, state: V2State) -> dict[str, Any]:
+        """Pause for a typed human decision and route the resumed run."""
+        pending = state.get("pending_human_review") or {
+            "reason": "workflow requires human review",
+            "source_step": "workflow",
+            "resume_target": "finalize",
+            "kind": "review",
+            "options": ["approve", "retry", "reject"],
+        }
+        decision = interrupt(pending, response_schema=HumanReviewDecision)
+        if not isinstance(decision, HumanReviewDecision):
+            decision = HumanReviewDecision.model_validate(decision)
+
+        target = decision.target_step or str(pending.get("resume_target", "finalize"))
+        if decision.action == "retry":
+            route = self._repair_target(target)
+            update: dict[str, Any] = {
+                "route": route,
+                "pending_human_review": {},
+                "human_approved": True,
+                "human_rejected": False,
+                "issues": [
+                    issue
+                    for issue in state.get("issues", [])
+                    if issue != pending.get("reason")
+                ],
+            }
+        elif decision.action == "approve":
+            # A breaking contract may continue only after approval, and the
+            # approved path regenerates affected cases before re-running the gate.
+            route = "regenerate_affected" if pending.get("kind") == "contract" else "finalize"
+            update = {
+                "route": route,
+                "pending_human_review": {},
+                "human_approved": True,
+                "human_rejected": False,
+                "issues": [
+                    issue
+                    for issue in state.get("issues", [])
+                    if issue != pending.get("reason")
+                ],
+            }
+        if decision.action in {"approve", "retry"}:
+            self.repair.history.escalated_to_human = False
+            self.repair.save()
+        else:
+            update = {
+                "route": "finalize",
+                "pending_human_review": {},
+                "human_approved": False,
+                "human_rejected": True,
+                "final_decision": "NEEDS_HUMAN",
+            }
+
+        self.logger.log(
+            "human_review",
+            detail={
+                "action": decision.action,
+                "target_step": target,
+                "comment": decision.comment,
+            },
+        )
+        write_json(
+            self.output_dir / "human-review.json",
+            {
+                "run_id": self.run_id,
+                "status": "resumed",
+                "request": pending,
+                "decision": decision.model_dump(),
+            },
+        )
+        return update
+
+    def _record_pending_repair(
+        self,
+        state: V2State,
+        loop_key: str,
+        artifact: Path,
+        *,
+        after_signature: str,
+    ) -> tuple[dict[str, Any], bool]:
+        """Archive the artifact produced by the previous repair attempt."""
+        pending = state.get("pending_repairs", {}).get(loop_key)
+        if not pending:
+            return {"pending_repairs": dict(state.get("pending_repairs", {}))}, False
+
+        after = _read_json(artifact) or {}
+        before = pending.get("before", {})
+        no_progress = pending.get("before_signature", "") == after_signature
+        self.repair.record(
+            trigger=pending.get("trigger", "repair"),
+            target_step=pending.get("target_step", ""),
+            before=before,
+            after=after,
+            affected_case_ids=pending.get("affected_case_ids", []),
+        )
+        remaining = dict(state.get("pending_repairs", {}))
+        remaining.pop(loop_key, None)
+        return {"pending_repairs": remaining}, no_progress
 
     def _repair_route(
         self,
@@ -251,26 +486,41 @@ class V2Workflow:
         previous = state.get("prev_signatures", {}).get(loop_key)
         signatures = dict(state.get("prev_signatures", {}))
         update: dict[str, Any] = {"prev_signatures": signatures}
-        if previous is not None and previous == current_signature:
-            update.update(self._escalate(state, f"{loop_key}: repair produced no progress"))
-            update["route"] = "human"
-            return update
-        if self.repair.exhausted:
+        repair_update, no_progress = self._record_pending_repair(
+            state, loop_key, artifact, after_signature=current_signature
+        )
+        update.update(repair_update)
+        if no_progress or (previous is not None and previous == current_signature):
             update.update(
-                self._escalate(
+                self._escalate_for_human(
                     state,
-                    f"{loop_key}: max repair attempts ({self.repair.history.max_repair_attempts}) reached",
+                    f"{loop_key}: repair produced no progress",
+                    source_step=target_step,
+                    resume_target=self._repair_target(target_step),
                 )
             )
             update["route"] = "human"
             return update
-        self.repair.record(
-            trigger=trigger,
-            target_step=target_step,
-            before={"previous_signature": previous} if previous is not None else {},
-            after=_read_json(artifact) or {},
-        )
+        if self.repair.exhausted:
+            update.update(
+                self._escalate_for_human(
+                    state,
+                    f"{loop_key}: max repair attempts ({self.repair.history.max_repair_attempts}) reached",
+                    source_step=target_step,
+                    resume_target=self._repair_target(target_step),
+                )
+            )
+            update["route"] = "human"
+            return update
         signatures[loop_key] = current_signature
+        pending_repairs = dict(update.get("pending_repairs", {}))
+        pending_repairs[loop_key] = {
+            "before": _read_json(artifact) or {},
+            "before_signature": current_signature,
+            "trigger": trigger,
+            "target_step": target_step,
+        }
+        update["pending_repairs"] = pending_repairs
         update["route"] = "retry"
         return update
 
@@ -522,18 +772,33 @@ class V2Workflow:
             update["route"] = "continue"
         elif self.repair.exhausted:
             update.update(
-                self._escalate(state, "contract: max repair attempts reached on breaking changes")
+                self._escalate_for_human(
+                    state,
+                    "contract: max repair attempts reached on breaking changes",
+                    source_step="contract_gate",
+                    resume_target="finalize",
+                )
             )
             update.update(self._trace(state, "contract_gate", report.status, "human"))
             update["route"] = "human"
         else:
-            # P0 修复：破坏性契约变化必须人工确认。选择性再生照常执行
-            # （保留再生能力），但本轮升级 NEEDS_HUMAN，人工确认后以当前
-            # 契约为基线重跑才会恢复 PASS——防止服务端误删接口被静默消化。
+            # 破坏性契约变化必须先经过 interrupt 人工确认，不能在同一轮
+            # 自动再生后静默吸收为新基线。
+            # 这条记录是契约漂移的审计快照，不计入自动修复预算；真正的
+            # 选择性再生会在人工批准后由 regenerate_affected 记录 diff。
+            self.repair.record(
+                trigger="contract_breaking_change",
+                target_step="human_review",
+                before=baseline.model_dump(),
+                after=runtime.model_dump(),
+            )
             update.update(
-                self._escalate(
+                self._escalate_for_human(
                     state,
                     "contract: breaking changes need human confirmation before the baseline is regenerated",
+                    source_step="contract_gate",
+                    resume_target="regenerate_affected",
+                    kind="contract",
                 )
             )
             update.update(
@@ -541,11 +806,11 @@ class V2Workflow:
                     state,
                     "contract_gate",
                     report.status,
-                    "regenerate_affected",
-                    f"{len(report.changes)} changes (escalated for human confirmation)",
+                    "human_review",
+                    f"{len(report.changes)} changes require human confirmation",
                 )
             )
-            update["route"] = "regenerate"
+            update["route"] = "human"
         return update
 
     def regenerate_affected(self, state: V2State) -> dict[str, Any]:
@@ -681,7 +946,11 @@ class V2Workflow:
             inconclusive_cases = current_review.inconclusive
             approved = current_review.decision == "approved"
 
-        if approved and not escalated:
+        if state.get("human_rejected"):
+            decision = "NEEDS_HUMAN"
+        elif approved and not escalated:
+            decision = "PASS"
+        elif approved and state.get("human_approved"):
             decision = "PASS"
         elif failed_cases:
             decision = "FAIL"

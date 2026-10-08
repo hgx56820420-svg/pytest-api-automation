@@ -62,6 +62,23 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Enable the LangChain requirement analyst (needs LLM_API_KEY/LLM_BASE_URL/LLM_MODEL in .env)",
     )
+    resume_parser = subparsers.add_parser(
+        "v2-resume", help="Resume a paused V2 workflow after human review"
+    )
+    resume_parser.add_argument("--run-id", required=True)
+    resume_parser.add_argument("--output", type=Path, default=Path("artifacts/v2"))
+    resume_parser.add_argument("--openapi", required=True)
+    resume_parser.add_argument("--requirements-md", type=Path, required=True)
+    resume_parser.add_argument("--base-url", required=True)
+    resume_parser.add_argument("--database-url", required=True)
+    resume_parser.add_argument("--runtime-openapi")
+    resume_parser.add_argument("--max-repair-attempts", type=int, default=2)
+    resume_parser.add_argument("--adapter", default="mini_shop")
+    resume_parser.add_argument("--fixed-accounts", action="store_true")
+    resume_parser.add_argument("--llm-analysis", action="store_true")
+    resume_parser.add_argument("--action", choices=["approve", "retry", "reject"], required=True)
+    resume_parser.add_argument("--target-step", default="")
+    resume_parser.add_argument("--comment", default="")
 
     args = parser.parse_args(argv)
     if args.command == "generate":
@@ -78,6 +95,8 @@ def main(argv: list[str] | None = None) -> int:
         return returncode
     if args.command == "v2":
         return _run_v2(args)
+    if args.command == "v2-resume":
+        return _resume_v2(args)
 
     requirement, cases, coverage, review, requirement_review = generate(args.openapi, args.output, args.requirements_md)
     if coverage.decision != "approved" or review.decision != "approved":
@@ -115,8 +134,10 @@ def _run_v2(args: argparse.Namespace) -> int:
                 "error": f"{type(exc).__name__}: {exc}",
             }
         )
+        workflow.close()
         return 3
     report_path = args.output / "workflow-report.json"
+    pending = workflow.pending_interrupt()
     summary = {
         "run_id": run_id,
         "decision": result.get("final_decision", "INCONCLUSIVE"),
@@ -126,9 +147,60 @@ def _run_v2(args: argparse.Namespace) -> int:
         "steps": [f"{step['step']}:{step['decision']}->{step['routed_to']}" for step in result.get("steps", [])],
         "messages": len(result.get("messages", [])),
     }
+    if pending is not None:
+        summary["status"] = "WAITING_HUMAN"
+        summary["interrupt"] = getattr(pending, "value", pending)
+        summary["resume"] = (
+            f"python -m api_agent v2-resume --run-id {run_id} "
+            f"--output {args.output} --openapi {args.openapi} "
+            f"--requirements-md {args.requirements_md} --base-url {args.base_url} "
+            f"--database-url {args.database_url} --action approve|retry|reject"
+        )
     _print(summary)
     decision = result.get("final_decision", "INCONCLUSIVE")
+    workflow.close()
     return 0 if decision == "PASS" else 3 if decision == "NEEDS_HUMAN" else 1
+
+
+def _resume_v2(args: argparse.Namespace) -> int:
+    """Resume an existing run using its persisted SQLite checkpoint."""
+    workflow = V2Workflow(
+        output_dir=args.output,
+        openapi_source=args.openapi,
+        requirements_md=args.requirements_md,
+        base_url=args.base_url,
+        database_url=args.database_url,
+        runtime_openapi=args.runtime_openapi,
+        max_repair_attempts=args.max_repair_attempts,
+        adapter=args.adapter,
+        fixed_accounts=args.fixed_accounts,
+        llm_analysis=args.llm_analysis,
+        run_id=args.run_id,
+    )
+    try:
+        result = workflow.resume(
+            {
+                "action": args.action,
+                "target_step": args.target_step,
+                "comment": args.comment,
+            }
+        )
+        decision = result.get("final_decision", "INCONCLUSIVE")
+        _print(
+            {
+                "run_id": args.run_id,
+                "decision": decision,
+                "workflow_report": str(args.output / "workflow-report.json"),
+                "repair_attempts": workflow.repair.attempts,
+            }
+        )
+        return 0 if decision == "PASS" else 3 if decision == "NEEDS_HUMAN" else 1
+    except Exception as exc:
+        workflow.write_error_report(exc)
+        _print({"run_id": args.run_id, "decision": "NEEDS_HUMAN", "error": str(exc)})
+        return 3
+    finally:
+        workflow.close()
 
 
 def _print(value: object) -> None:

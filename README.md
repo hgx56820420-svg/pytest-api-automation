@@ -10,7 +10,7 @@
 - **需求文档优先**：`REQ-XX-001` 格式的 Markdown 需求文档是主要输入，OpenAPI 退为运行时契约基准
 - **多 Agent 工作流**：LangGraph StateGraph 编排 9 个 Agent 节点，Agent 间只传递 Pydantic 校验的消息信封
 - **审核路由回路**：审核失败路由回正确的前置 Agent，不盲目重跑全流程
-- **受限自修复**：修复次数有上限（默认 2 次），每次修复留 before/after diff，无进展或超限转人工（`NEEDS_HUMAN`）
+- **受限自修复**：修复次数有上限（默认 2 次），每次修复留 before/after diff；无进展或超限通过 LangGraph `interrupt` 暂停，人工决定后可从 SQLite checkpoint 恢复（`NEEDS_HUMAN`）
 - **契约门禁**：基线与运行时 OpenAPI 比对，破坏性变化触发受影响用例的选择性再生
 - **证据链**：`run_id / case_id / operation_id / request_id` 四方关联，HTTP/数据库 before-after 快照、JSONL 日志、Allure 附件
 - **多被测对象**：adapter 插件机制，接入新服务只需注册一个 `DomainAdapter`，框架层零改动

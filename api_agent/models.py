@@ -217,6 +217,7 @@ class RepairHistory(StrictModel):
     """Bounded repair ledger persisted as repair-history.json."""
 
     schema_version: Literal["2.0"] = "2.0"
+    run_id: str = ""
     max_repair_attempts: int
     repairs: list[RepairAction] = Field(default_factory=list)
     escalated_to_human: bool = False
@@ -284,6 +285,14 @@ class AgentMessage(StrictModel):
     payload_hash: str = ""
     decision: str = ""
     issues: list[str] = Field(default_factory=list)
+
+
+class HumanReviewDecision(StrictModel):
+    """Validated response supplied when a workflow is resumed by a human."""
+
+    action: Literal["approve", "retry", "reject"]
+    target_step: str = ""
+    comment: str = ""
 
 
 class CleanupSpec(StrictModel):

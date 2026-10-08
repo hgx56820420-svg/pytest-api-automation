@@ -19,13 +19,29 @@ class RepairManager:
     audit what changed before and after.
     """
 
-    def __init__(self, output_dir: Path, max_repair_attempts: int):
+    def __init__(self, output_dir: Path, max_repair_attempts: int, run_id: str = ""):
         self.path = output_dir / "repair-history.json"
-        self.history = RepairHistory(max_repair_attempts=max_repair_attempts)
+        loaded = None
+        if self.path.exists():
+            try:
+                candidate = RepairHistory.model_validate_json(
+                    self.path.read_text(encoding="utf-8")
+                )
+                if not run_id or not candidate.run_id or candidate.run_id == run_id:
+                    loaded = candidate
+            except (OSError, ValueError):
+                # A corrupt ledger must not make the workflow silently lose its
+                # audit boundary; start a fresh ledger and let the workflow
+                # surface the resulting run in its normal reports.
+                loaded = None
+        self.history = loaded or RepairHistory(
+            run_id=run_id, max_repair_attempts=max_repair_attempts
+        )
 
     @property
     def attempts(self) -> int:
-        return len(self.history.repairs)
+        # Escalation records are audit events, not automatic repair attempts.
+        return sum(action.target_step != "human_review" for action in self.history.repairs)
 
     @property
     def exhausted(self) -> bool:
@@ -55,6 +71,9 @@ class RepairManager:
 
     def escalate(self, reason: str = "") -> None:
         """Mark the run as needing human review and persist the escalation."""
+        if self.history.escalated_to_human:
+            self.save()
+            return
         self.history.escalated_to_human = True
         self.history.repairs.append(
             RepairAction(

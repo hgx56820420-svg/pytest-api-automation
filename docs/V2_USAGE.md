@@ -16,7 +16,7 @@ V2 在 V1 确定性闭环的基础上，引入 **LangGraph 编排的多 Agent �
   -> 收尾              决策 + 失败现场保留                    -> workflow-report.json
 ```
 
-Agent 之间只传递经过 Pydantic 校验的消息信封（`AgentMessage`：`from/to/topic/payload_ref/payload_hash`），payload 以产物文件为引用，可独立审计。所有节点当前为确定性实现；后续接入 LLM 时，只需把对应节点内部替换为 LangChain 结构化调用，图结构不变。
+Agent 之间只传递经过 Pydantic 校验的消息信封（`AgentMessage`：`from/to/topic/payload_ref/payload_hash`），payload 以产物文件为引用，可独立审计。除可选的 `analyze_requirements` 外，节点主要是确定性实现；该节点在显式传入 `--llm-analysis` 且 LLM 配置完整时使用 LangChain 结构化调用。工作流使用 SQLite checkpoint 保存状态，人工升级进入 `interrupt`，可用同一 `run_id` 从断点恢复。
 
 ## 1. 启动独立测试服务
 
@@ -44,6 +44,18 @@ python -m api_agent v2 `
 ```
 
 退出码：`0` PASS；`1` FAIL（业务断言失败，转人工定位）；`3` NEEDS_HUMAN（修复预算耗尽或审核无法收敛）。
+
+如果输出状态为 `WAITING_HUMAN`，命令会打印中断原因和恢复命令。人工决定后使用同一个 `run_id` 恢复：
+
+```powershell
+python -m api_agent v2-resume `
+  --run-id run-xxxxxxxxxxxx `
+  --output artifacts/v2 `
+  --action approve `
+  --comment "确认此次契约变更"
+```
+
+`--action` 可选 `approve`、`retry`、`reject`。`approve` 会继续当前人工确认的流程，`retry` 会回到待修复节点，`reject` 会结束为 `NEEDS_HUMAN`。
 
 ## 3. 输出
 
@@ -77,7 +89,7 @@ artifacts/v2/
 - 自动修复默认最多 2 次（`--max-repair-attempts`）。
 - 修复重跑后产物签名与上次相同（无进展）时立即转人工，不烧完预算。
 - 每次修复在 `repair-history.json` 留档 attempt、trigger、before/after 摘要和 unified diff。
-- 超限后工作流决策为 `NEEDS_HUMAN`，等待人工审核后再继续。
+- 超限后工作流进入 `human_review` 节点，通过 LangGraph `interrupt` 等待人工审核；状态保存在 `workflow-checkpoints.sqlite3`，恢复不需要从头重跑。
 
 ### 契约变化的选择性再生
 
