@@ -18,6 +18,18 @@
 - **证据链**：`run_id / case_id / operation_id / request_id` 四方关联，HTTP/数据库 before-after 快照、JSONL 日志、Allure 附件
 - **多被测对象**：adapter 插件机制，接入新服务只需注册一个 `DomainAdapter`，框架层零改动
 
+## 五阶段改造结果
+
+当前 V2 已按以下五个阶段完成重构：
+
+1. **Workflow 分层**：确定性的需求解析、用例设计、脚本生成、契约比较、执行和结果审核分别由独立 Workflow 负责；LangGraph 只负责流程路由、状态保存和人工中断。
+2. **需求阶段并行**：Markdown 需求解析与 OpenAPI 归一化可以同时执行，互不依赖的准备工作不再串行等待。
+3. **安全并行执行**：支持 `--parallel-workers`，但只有 Adapter 明确声明 `parallel_safe=True` 且安装 `pytest-xdist` 时才会真正并行；当前三个业务 Adapter 默认串行，避免共享数据库、账号和库存状态互相污染。
+4. **缓存与断点复用**：确定性产物按输入指纹写入 `workflow-cache.json`；LangGraph 使用 `workflow-checkpoints.sqlite3` 保存流程进度，人工审核后可从原节点恢复。
+5. **Agent 内置 LLM 插件**：已移除 LangChain。需求分析 Agent 通过 `api_agent/llm_plugin.py` 直接调用 OpenAI 兼容 API，模型输出必须经过 Pydantic 校验，模型不直接执行 SQL、Shell 或测试代码。
+
+默认情况下不会调用 LLM。只有显式传入 `--llm-analysis`，并且配置完整时，`analyze_requirements` 节点才会启用插件；其他 Workflow 均为确定性逻辑。插件的结构化 JSON 最多尝试 4 次，纯文本 JSON 兜底最多 3 次，所有重试、退避和失败原因都会写入 `llm-retry-history.json`。
+
 ## 架构
 
 ```text
@@ -109,6 +121,27 @@ python -m api_agent v2-resume `
 
 `--parallel-workers` 只在 Adapter 明确声明 `parallel_safe` 且安装 `pytest-xdist` 时生效；当前业务 Adapter 默认串行，避免共享 SQLite、测试账号和库存状态相互污染。实际模式写入 `execution-mode.json`。
 
+### 可选的 LLM 需求分析
+
+先配置 OpenAI 兼容网关的三个参数，再显式开启分析节点：
+
+```powershell
+$env:LLM_API_KEY = "your-api-key"
+$env:LLM_BASE_URL = "https://your-gateway.example/v1"
+$env:LLM_MODEL = "your-model"
+
+python -m api_agent v2 `
+  --openapi http://127.0.0.1:8010/openapi.json `
+  --requirements-md docs/MINI_SHOP_API_REQUIREMENTS.md `
+  --base-url http://127.0.0.1:8010 `
+  --database-url sqlite:///./agent-v2.db `
+  --output artifacts/v2 `
+  --adapter mini_shop `
+  --llm-analysis
+```
+
+LLM 只负责把自然语言需求拆解为经过校验的声明式规则；实际 HTTP 请求、数据库断言和副作用检查仍由确定性执行器完成。若输入文档、OpenAPI、模型或网关地址没有变化，已校验的 `llm-rules.json` 可以从 `workflow-cache.json` 复用，不会重复调用模型。
+
 V1 命令（`generate` / `check` / `run` / `pipeline`）保持兼容，见 [`docs/V1_USAGE.md`](docs/V1_USAGE.md)；V2 详细说明见 [`docs/V2_USAGE.md`](docs/V2_USAGE.md)。
 
 Allure 报告：`.\scripts\run_allure.ps1`（需要 Java 21+，详见 [`NEXT_MACHINE.md`](NEXT_MACHINE.md)）。
@@ -127,7 +160,10 @@ tests/test_agent_v1.py        V1 规划/契约/脚本审核（9 个用例）
 tests/test_agent_v2.py        V2 工作流路由/修复/diff/checkpoint/interrupt（23 个用例）
 tests/test_agent_library.py   Library adapter 二次验证（8 个用例）
 tests/test_agent_meeting.py   Meeting adapter 二次验证（6 个用例）
+tests/test_agent_plugin.py    LLM 插件重试、脱敏、URL 和缓存（5 个用例）
 ```
+
+当前测试总数：51 个。
 
 GitHub Actions（[`.github/workflows/tests.yml`](.github/workflows/tests.yml)）在每次 push 时运行全部测试。
 
