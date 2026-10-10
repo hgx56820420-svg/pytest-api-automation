@@ -1,22 +1,22 @@
 # V2 使用说明
 
-V2 在 V1 确定性闭环的基础上，引入 **LangGraph 编排的多 Agent 工作流**，并以需求文档（Markdown）为主要输入，OpenAPI 退为契约校验基准：
+V2 在 V1 确定性闭环的基础上，引入 **LangGraph 编排的 Multi-Agent + Workflow 分层**，并以需求文档（Markdown）为主要输入，OpenAPI 退为契约校验基准：
 
 ```text
 需求文档 (MD)
-  -> 需求解析 Agent    从文档抽取接口清单、认证要求、业务规则 -> parsed-requirement.json
-  -> 需求审核 Agent    与 OpenAPI 契约交叉对齐               -> requirement-review.json
-  -> 用例设计 Agent    生成标准用例 JSON                     -> test-cases.json
-  -> 覆盖审核 Agent    审核覆盖缺口，缺口回传用例 Agent       -> coverage-report.json
-  -> 脚本生成 Agent    用例 JSON -> pytest                   -> generated-tests/
-  -> 脚本审核 Agent    静态检查，不通过回传脚本 Agent         -> script-review.json
+  -> RequirementWorkflow（Markdown/OpenAPI 并行）                   -> parsed/normalized-requirement.json
+  -> 需求审核 Workflow   与 OpenAPI 契约交叉对齐                       -> requirement-review.json
+  -> CaseWorkflow         生成标准用例 JSON                           -> test-cases.json
+  -> 覆盖审核 Workflow    审核覆盖缺口，缺口回传 CaseWorkflow           -> coverage-report.json
+  -> ScriptWorkflow        用例 JSON -> pytest                         -> generated-tests/
+  -> 脚本审核 Workflow     静态检查，不通过回传 ScriptWorkflow           -> script-review.json
   -> 契约门禁          破坏性变化先 interrupt，人工 approve 后选择性再生 -> contract-diff.json
   -> 执行 Agent        真实 HTTP + 数据库证据                 -> execution-report.json
   -> 结果审核 Agent    证据链与 request_id 关联校验           -> result-review.json
   -> 收尾              决策 + 失败现场保留                    -> workflow-report.json
 ```
 
-Agent 之间只传递经过 Pydantic 校验的消息信封（`AgentMessage`：`from/to/topic/payload_ref/payload_hash`），payload 以产物文件为引用，可独立审计。除可选的 `analyze_requirements` 外，节点主要是确定性实现；该节点在显式传入 `--llm-analysis` 且 LLM 配置完整时使用 LangChain 结构化调用。LLM SDK 自动重试已关闭，模型调用次数和退避由脚本显式控制：结构化调用最多 4 次，失败后纯文本 JSON 兜底最多 3 次。工作流使用 SQLite checkpoint 保存状态，人工升级进入 `interrupt`，可用同一 `run_id` 从断点恢复。
+Agent 之间只传递经过 Pydantic 校验的消息信封（`AgentMessage`：`from/to/topic/payload_ref/payload_hash`），payload 以产物文件为引用，可独立审计。除可选的 `analyze_requirements` 外，节点主要是确定性 Workflow；该节点是寄宿在 Requirement Analyst Agent 内部的可选 LLM 插件，直接调用 OpenAI 兼容 API，不依赖 LangChain。LLM 插件的调用次数和退避由脚本显式控制：结构化 JSON 调用最多 4 次，失败后纯文本 JSON 兜底最多 3 次。工作流使用 SQLite checkpoint 保存状态，人工升级进入 `interrupt`，可用同一 `run_id` 从断点恢复。
 
 ## 1. 启动独立测试服务
 
@@ -81,8 +81,10 @@ artifacts/v2/
   human-review.json             人工中断请求与决定
   failure-scene.json            失败现场索引（含升级原因）
   workflow-input.json           首次运行参数快照（恢复时校验，数据库 URL 仅存 hash）
-  llm-rules.json                可选 LangChain 需求分析产物
-  llm-retry-history.json        LLM 每次尝试的阶段、次数和失败原因
+  llm-rules.json                可选 LLM 插件需求分析产物
+  llm-retry-history.json        LLM 插件每次尝试的阶段、次数和失败原因
+  workflow-cache.json            确定性 Workflow 输入指纹与缓存产物索引
+  execution-mode.json            请求并行度、实际并行度和安全降级原因
   workflow-checkpoints.sqlite3  LangGraph 断点数据库
   evidence/<run_id>/agent-log.jsonl   结构化日志（V2 新增）
   evidence/<run_id>/<case>.json       每用例证据，含 request_id
@@ -101,6 +103,7 @@ artifacts/v2/
 - 修复重跑后产物签名与上次相同（无进展）时立即转人工，不烧完预算。
 - 每次修复在 `repair-history.json` 留档 attempt、trigger、before/after 摘要和 unified diff。
 - 每次重试计划和修复结果都保留失败原因；如果仍无进展或达到预算上限，人工中断原因包含原始失败原因或最后一次失败原因。
+- RequirementWorkflow 的 Markdown 解析和 OpenAPI 归一化可并行执行；确定性产物按输入指纹缓存，恢复或重复运行时跳过未变化阶段。执行并行只有 Adapter 声明 `parallel_safe` 且存在 `pytest-xdist` 时才启用，默认仍串行。
 - 超限或无进展后工作流进入 `human_review` 节点，通过 LangGraph `interrupt` 等待人工审核；状态保存在 `workflow-checkpoints.sqlite3`，恢复不需要从头重跑。
 - `workflow-report.json` 在运行中先写 `RUNNING`，中断时写 `WAITING_HUMAN`，最终才写 `COMPLETED`；因此即使尚未恢复，也能看到当前轨迹和失败现场。
 

@@ -1,4 +1,4 @@
-"""LLM client bootstrap for the requirement analyst agent.
+"""LLM settings bootstrap for the requirement analyst Agent plugin.
 
 配置来源：仓库根目录 ``.env``（已 gitignore）或进程环境变量。
 
@@ -39,28 +39,3 @@ def is_llm_enabled() -> bool:
     """LLM analysis requires the triple config; the on/off switch is the
     caller's explicit flag (CLI --llm-analysis), not a hidden env var."""
     return bool(llm_setting("LLM_API_KEY") and llm_setting("LLM_BASE_URL") and llm_setting("LLM_MODEL"))
-
-
-def get_chat_model():
-    """Build a LangChain ChatOpenAI bound to the configured gateway.
-
-    Retry policy deliberately lives in ``llm_analyst.py``.  Setting the SDK
-    retry budget to zero prevents LangChain/OpenAI from silently adding extra
-    attempts that would not appear in the workflow audit trail.
-    """
-    import re
-
-    from langchain_openai import ChatOpenAI
-
-    base = llm_setting("LLM_BASE_URL").rstrip("/")
-    # 已带版本段的网关（智谱 /v4、千帆 /v2 等）原样使用，否则补 OpenAI 默认 /v1
-    if not re.search(r"/v\d+$", base):
-        base += "/v1"
-    return ChatOpenAI(
-        api_key=llm_setting("LLM_API_KEY"),
-        base_url=base,
-        model=llm_setting("LLM_MODEL"),
-        temperature=0,
-        timeout=180,
-        max_retries=0,
-    )

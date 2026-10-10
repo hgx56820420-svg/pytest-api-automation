@@ -7,9 +7,11 @@ import shutil
 import subprocess
 import sys
 import uuid
+import importlib.util
 from pathlib import Path
 
-from api_agent.artifacts import export_schemas, read_model, write_model
+from api_agent.artifacts import export_schemas, read_model, write_json, write_model
+from api_agent.adapters import get_adapter
 from api_agent.contract import compare_contracts
 from api_agent.generator import generate_pytest, review_generated_script
 from api_agent.models import (
@@ -76,6 +78,7 @@ def run(
     adapter_name: str | None = None,
     fixed_accounts: bool = False,
     rules_path: Path | None = None,
+    parallel_workers: int = 1,
 ) -> tuple[ExecutionReport, int]:
     requirement = read_model(output_dir / "normalized-requirement.json", NormalizedRequirement)
     cases = read_model(output_dir / "test-cases.json", TestCaseDocument)
@@ -113,6 +116,27 @@ def run(
             "API_AGENT_RULES_PATH": str(rules_path) if rules_path and rules_path.exists() else "",
         }
     )
+    adapter = get_adapter(adapter_name)
+    requested_workers = max(1, parallel_workers)
+    if requested_workers > 1 and not adapter.parallel_safe:
+        effective_workers = 1
+        mode_reason = f"adapter {adapter.name} does not declare parallel_safe"
+    elif requested_workers > 1 and importlib.util.find_spec("xdist") is None:
+        effective_workers = 1
+        mode_reason = "pytest-xdist is not installed"
+    else:
+        effective_workers = requested_workers
+        mode_reason = "adapter opted in and pytest-xdist is available" if effective_workers > 1 else "serial execution requested"
+    write_json(
+        output_dir / "execution-mode.json",
+        {
+            "requested_workers": requested_workers,
+            "effective_workers": effective_workers,
+            "adapter": adapter.name,
+            "parallel_safe": adapter.parallel_safe,
+            "reason": mode_reason,
+        },
+    )
     command = [
         sys.executable,
         "-m",
@@ -124,6 +148,8 @@ def run(
         "--alluredir",
         str(allure_results),
     ]
+    if effective_workers > 1:
+        command.extend(["-n", str(effective_workers)])
     try:
         completed = subprocess.run(command, env=environment, text=True, capture_output=True, timeout=180, check=False)
         (output_dir / "pytest.stdout.log").write_text(completed.stdout, encoding="utf-8")

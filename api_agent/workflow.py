@@ -30,8 +30,6 @@ from api_agent.adapters import get_adapter
 from api_agent.agentlog import AgentLogger
 from api_agent.artifacts import read_model, write_json, write_model
 from api_agent.llm_client import is_llm_enabled, llm_setting
-from api_agent.contract import compare_contracts
-from api_agent.generator import generate_pytest, review_generated_script
 from api_agent.models import (
     AgentMessage,
     ContractDiffReport,
@@ -39,6 +37,7 @@ from api_agent.models import (
     ExecutionReport,
     HumanReviewDecision,
     NormalizedRequirement,
+    ParsedRequirement,
     RequirementReview,
     ResultReviewReport,
     ScriptReviewReport,
@@ -48,11 +47,17 @@ from api_agent.models import (
 )
 from api_agent.openapi import canonical_hash, load_openapi, normalize_openapi
 from api_agent.pipeline import run as run_pipeline
-from api_agent.planner import plan_cases, review_coverage
+from api_agent.planner import plan_cases
 from api_agent.repair import RepairManager
-from api_agent.requirement_parser import parse_requirements
-from api_agent.requirements import review_markdown_requirements
-from api_agent.result_review import review_execution_results
+from api_agent.workflow_cache import WorkflowCache
+from api_agent.workflows import (
+    CaseWorkflow,
+    ContractWorkflow,
+    ExecutionWorkflow,
+    RequirementWorkflow,
+    ResultWorkflow,
+    ScriptWorkflow,
+)
 
 ARTIFACT_NAMES = [
     "parsed-requirement.json",
@@ -71,6 +76,8 @@ ARTIFACT_NAMES = [
     "human-review.json",
     "failure-scene.json",
     "workflow-checkpoints.sqlite3",
+    "workflow-cache.json",
+    "execution-mode.json",
 ]
 
 
@@ -114,6 +121,7 @@ class V2Workflow:
         fixed_accounts: bool = False,
         llm_analysis: bool = False,
         run_id: str,
+        parallel_workers: int = 1,
     ):
         self.output_dir = output_dir
         self.openapi_source = openapi_source
@@ -126,8 +134,22 @@ class V2Workflow:
         self.llm_analysis = llm_analysis
         self.run_id = run_id
         self.max_repair_attempts = max_repair_attempts
+        self.parallel_workers = max(1, parallel_workers)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.repair = RepairManager(output_dir, max_repair_attempts, run_id=run_id)
+        self.cache = WorkflowCache(output_dir)
+        self.requirement_workflow = RequirementWorkflow(
+            requirements_md=requirements_md,
+            openapi_source=openapi_source,
+            adapter=get_adapter(adapter),
+            load_openapi_fn=load_openapi,
+        )
+        self.case_workflow = CaseWorkflow(adapter)
+        self.script_workflow = ScriptWorkflow()
+        self.contract_workflow = ContractWorkflow()
+        self.execution_workflow = ExecutionWorkflow()
+        self.result_workflow = ResultWorkflow()
+        self._llm_rules_ready = False
         self.logger = AgentLogger(output_dir / "evidence" / run_id / "agent-log.jsonl", run_id)
         self.checkpoint_path = output_dir / "workflow-checkpoints.sqlite3"
         self._checkpoint_connection = sqlite3.connect(
@@ -286,6 +308,7 @@ class V2Workflow:
             "adapter": self.adapter,
             "fixed_accounts": self.fixed_accounts,
             "llm_analysis": self.llm_analysis,
+            "parallel_workers": self.parallel_workers,
         }
 
     def _write_workflow_input(self) -> None:
@@ -302,7 +325,8 @@ class V2Workflow:
         mismatches = [
             key
             for key in current
-            if key != "run_id" and saved.get(key) != current[key]
+            if key != "run_id"
+            and saved.get(key, 1 if key == "parallel_workers" else None) != current[key]
         ]
         if saved.get("run_id") != self.run_id:
             mismatches.append("run_id")
@@ -310,6 +334,52 @@ class V2Workflow:
             raise WorkflowInputMismatch(
                 "resume parameters do not match the original run: " + ", ".join(sorted(set(mismatches)))
             )
+
+    def _source_fingerprint(self, source: str | Path) -> str:
+        """Return a safe cache fingerprint; remote OpenAPI sources are not cached."""
+        path = Path(source)
+        if not path.exists():
+            return ""
+        return _file_hash(path)
+
+    def _cache_key(self, stage: str, payload: dict[str, Any]) -> str:
+        return self.cache.fingerprint({"schema_version": "1.0", "stage": stage, **payload})
+
+    def _llm_analysis_key(self) -> str:
+        """Build the cache key for the optional analyst plugin."""
+        adapter = get_adapter(self.adapter)
+        return self._cache_key(
+            "llm_analysis",
+            {
+                "requirements": _file_hash(self.requirements_md),
+                "requirement": _file_hash(self.output_dir / "normalized-requirement.json"),
+                "model": llm_setting("LLM_MODEL"),
+                "base_url": llm_setting("LLM_BASE_URL"),
+                "adapter": self.adapter,
+                "observable_tables": adapter.observable_tables,
+            },
+        )
+
+    def _load_cached_llm_rules(self) -> Any | None:
+        """Load only a cache entry that is current and schema-valid.
+
+        This is also used when a new process resumes directly at case design
+        after a human-approved retry, so the process-local readiness flag is
+        not the source of truth.
+        """
+        if not (self.llm_analysis and is_llm_enabled()):
+            return None
+        rules_path = self.output_dir / "llm-rules.json"
+        if not self.cache.hit("llm_analysis", self._llm_analysis_key(), [rules_path]):
+            return None
+        from api_agent.llm_rules import LLMRuleSet
+
+        try:
+            rules = LLMRuleSet.model_validate_json(rules_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        self._llm_rules_ready = True
+        return rules
 
     def _artifact_index(self) -> dict[str, str]:
         return {
@@ -674,19 +744,39 @@ class V2Workflow:
     # -- agents -------------------------------------------------------------
 
     def parse_requirement(self, state: V2State) -> dict[str, Any]:
-        """Requirement Parser Agent: Markdown interfaces + OpenAPI baseline."""
-        document = load_openapi(self.openapi_source)
-        requirement = normalize_openapi(document, self.openapi_source)
-        write_model(self.output_dir / "normalized-requirement.json", requirement)
-        parsed = parse_requirements(
-            self.requirements_md, blanket_auth=get_adapter(self.adapter).blanket_auth
+        """Requirement workflow: parallel Markdown parsing and OpenAPI normalization."""
+        artifacts = [
+            self.output_dir / "parsed-requirement.json",
+            self.output_dir / "normalized-requirement.json",
+        ]
+        source_fingerprint = self._source_fingerprint(self.openapi_source)
+        key = self._cache_key(
+            "requirements",
+            {
+                "openapi_source": self.openapi_source,
+                "openapi_fingerprint": source_fingerprint,
+                "requirements_fingerprint": _file_hash(self.requirements_md),
+                "adapter": self.adapter,
+            },
         )
-        write_model(self.output_dir / "parsed-requirement.json", parsed)
-        detail = (
-            f"{len(parsed.interfaces)} interfaces from requirements, "
-            f"{len(requirement.operations)} operations from OpenAPI"
-        )
-        update = self._trace(state, "parse_requirement", "done", "review_requirement", detail)
+        cacheable = bool(source_fingerprint)
+        if cacheable and self.cache.hit("requirements", key, artifacts):
+            parsed = read_model(artifacts[0], ParsedRequirement)
+            requirement = read_model(artifacts[1], NormalizedRequirement)
+            detail = (
+                f"cached: {len(parsed.interfaces)} interfaces from requirements, "
+                f"{len(requirement.operations)} operations from OpenAPI"
+            )
+            update = self._trace(state, "parse_requirement", "cached", "review_requirement", detail)
+        else:
+            parsed, requirement = self.requirement_workflow.prepare(self.output_dir)
+            if cacheable:
+                self.cache.store("requirements", key, artifacts)
+            detail = (
+                f"{len(parsed.interfaces)} interfaces from requirements, "
+                f"{len(requirement.operations)} operations from OpenAPI"
+            )
+            update = self._trace(state, "parse_requirement", "done", "review_requirement", detail)
         update.update(
             self._message(
                 state,
@@ -699,10 +789,28 @@ class V2Workflow:
         return update
 
     def review_requirement(self, state: V2State) -> dict[str, Any]:
-        """Requirement Review Agent: cross-check Markdown against OpenAPI."""
+        """Requirement workflow review: cross-check Markdown against OpenAPI."""
         requirement = read_model(self.output_dir / "normalized-requirement.json", NormalizedRequirement)
-        review = review_markdown_requirements(self.requirements_md, requirement)
+        artifact = self.output_dir / "requirement-review.json"
+        key = self._cache_key(
+            "requirement_review",
+            {
+                "requirement": _file_hash(self.output_dir / "normalized-requirement.json"),
+                "requirements": _file_hash(self.requirements_md),
+            },
+        )
+        cache_hit = self.cache.hit("requirement_review", key, [artifact])
+        if cache_hit:
+            review = read_model(artifact, RequirementReview)
+            review_detail = "cached requirement review"
+        else:
+            review = self.requirement_workflow.review(requirement)
+            review_detail = ""
         write_model(self.output_dir / "requirement-review.json", review)
+        if not cache_hit:
+            # Register the key only after the artifact is complete. This keeps
+            # a process interruption from pairing a new key with an old file.
+            self.cache.store("requirement_review", key, [artifact])
         approved = review.decision == "approved"
         update = self._message(
             state,
@@ -722,7 +830,7 @@ class V2Workflow:
                 failure_reason="review passed after retry",
             )
             update.update(repair_update)
-            update.update(self._trace(state, "review_requirement", "approved", "design_cases"))
+            update.update(self._trace(state, "review_requirement", "approved", "design_cases", review_detail))
             update["route"] = "approved"
         else:
             route_update = self._repair_route(
@@ -746,8 +854,9 @@ class V2Workflow:
         return update
 
     def analyze_requirements(self, state: V2State) -> dict[str, Any]:
-        """LLM 需求拆解节点：显式开启且配置齐全时才调用大模型。"""
+        """Optional analyst Agent plugin; deterministic stages do not call an LLM."""
         if not (self.llm_analysis and is_llm_enabled()):
+            self._llm_rules_ready = False
             self._record_llm_retry_history(
                 "skipped",
                 [],
@@ -760,8 +869,30 @@ class V2Workflow:
                 "design_cases",
                 "LLM analysis disabled (no --llm-analysis or missing .env config)",
             )
+        rules_path = self.output_dir / "llm-rules.json"
+        llm_key = self._llm_analysis_key()
+        cached_rules = self._load_cached_llm_rules()
+        if cached_rules is not None:
+            self._record_llm_retry_history("cached", [], "reused validated llm-rules.json")
+            rule_count = len(cached_rules.rules)
+            update = self._trace(
+                state,
+                "analyze_requirements",
+                "cached",
+                "design_cases",
+                f"reused {rule_count} validated rules from analyst plugin",
+            )
+            update.update(
+                self._message(
+                    state,
+                    "requirement_analyst",
+                    "case_designer",
+                    "llm_rules",
+                    str(rules_path),
+                )
+            )
+            return update
         try:
-            from api_agent.adapters import get_adapter
             from api_agent.llm_analyst import analyze_requirements, analyst_model_name
 
             requirement = read_model(self.output_dir / "normalized-requirement.json", NormalizedRequirement)
@@ -774,7 +905,9 @@ class V2Workflow:
             if repairs:
                 rules_doc["repairs"] = repairs
             rules_doc["retry_attempts"] = retry_attempts
-            write_json(self.output_dir / "llm-rules.json", rules_doc)
+            write_json(rules_path, rules_doc)
+            self.cache.store("llm_analysis", llm_key, [rules_path])
+            self._llm_rules_ready = True
             self._record_llm_retry_history("success", retry_attempts)
             self.logger.log(
                 "llm_retry_summary",
@@ -796,6 +929,7 @@ class V2Workflow:
             )
             return update
         except Exception as exc:  # LLM 失败不阻断确定性覆盖，只记录问题
+            self._llm_rules_ready = False
             attempts = getattr(exc, "attempts", [])
             error_detail = self._safe_error_detail(exc)
             self._record_llm_retry_history("failed", attempts, error_detail)
@@ -813,19 +947,38 @@ class V2Workflow:
             return {"issues": state.get("issues", []) + [f"llm analysis failed: {error_detail}"], **update}
 
     def design_cases(self, state: V2State) -> dict[str, Any]:
-        """Case Design Agent: plan the standard case JSON from the baseline."""
+        """Case workflow: deterministic planning plus optional validated LLM cases."""
         requirement = read_model(self.output_dir / "normalized-requirement.json", NormalizedRequirement)
         requirement_review = read_model(self.output_dir / "requirement-review.json", RequirementReview)
-        cases = plan_cases(requirement, requirement_review, self.adapter)
-        rules_path = self.output_dir / "llm-rules.json"
-        if rules_path.exists():
-            from api_agent.llm_rules import LLMRuleSet
-            from api_agent.planner import compile_llm_cases
-
-            rule_set = LLMRuleSet.model_validate_json(rules_path.read_text(encoding="utf-8"))
-            cases.cases.extend(compile_llm_cases(rule_set))
-        write_model(self.output_dir / "test-cases.json", cases)
-        update = self._trace(state, "case_designer", "done", "review_coverage", f"{len(cases.cases)} cases")
+        artifact = self.output_dir / "test-cases.json"
+        llm_path = self.output_dir / "llm-rules.json"
+        cached_rules = self._load_cached_llm_rules()
+        llm_rules_ready = cached_rules is not None
+        key = self._cache_key(
+            "case_design",
+            {
+                "requirement": _file_hash(self.output_dir / "normalized-requirement.json"),
+                "review": _file_hash(self.output_dir / "requirement-review.json"),
+                "llm_rules": _file_hash(llm_path)
+                if llm_rules_ready and llm_path.exists()
+                else "disabled",
+                "adapter": self.adapter,
+            },
+        )
+        if self.cache.hit("case_design", key, [artifact]):
+            cases = read_model(artifact, TestCaseDocument)
+            update = self._trace(
+                state, "case_designer", "cached", "review_coverage", f"cached {len(cases.cases)} cases"
+            )
+        else:
+            cases = self.case_workflow.design(
+                requirement,
+                requirement_review,
+                self.output_dir,
+                include_llm_rules=llm_rules_ready,
+            )
+            self.cache.store("case_design", key, [artifact])
+            update = self._trace(state, "case_designer", "done", "review_coverage", f"{len(cases.cases)} cases")
         update.update(
             self._message(
                 state,
@@ -838,12 +991,28 @@ class V2Workflow:
         return update
 
     def review_coverage(self, state: V2State) -> dict[str, Any]:
-        """Coverage Review Agent: approve or send gaps back to the designer."""
+        """Case workflow review: approve or send gaps back to the designer."""
         requirement = read_model(self.output_dir / "normalized-requirement.json", NormalizedRequirement)
         cases = read_model(self.output_dir / "test-cases.json", TestCaseDocument)
         requirement_review = read_model(self.output_dir / "requirement-review.json", RequirementReview)
-        coverage = review_coverage(requirement, cases, requirement_review, self.adapter)
-        write_model(self.output_dir / "coverage-report.json", coverage)
+        artifact = self.output_dir / "coverage-report.json"
+        key = self._cache_key(
+            "coverage_review",
+            {
+                "requirement": _file_hash(self.output_dir / "normalized-requirement.json"),
+                "cases": _file_hash(self.output_dir / "test-cases.json"),
+                "requirement_review": _file_hash(self.output_dir / "requirement-review.json"),
+                "adapter": self.adapter,
+            },
+        )
+        if self.cache.hit("coverage_review", key, [artifact]):
+            coverage = read_model(artifact, CoverageReport)
+            review_detail = "cached coverage review"
+        else:
+            coverage = self.case_workflow.review_coverage(requirement, cases, requirement_review)
+            write_model(artifact, coverage)
+            self.cache.store("coverage_review", key, [artifact])
+            review_detail = ""
         approved = coverage.decision == "approved"
         update = self._message(
             state,
@@ -863,7 +1032,7 @@ class V2Workflow:
                 failure_reason="coverage review passed after retry",
             )
             update.update(repair_update)
-            update.update(self._trace(state, "review_coverage", "approved", "generate_script"))
+            update.update(self._trace(state, "review_coverage", "approved", "generate_script", review_detail))
             update["route"] = "approved"
         else:
             route_update = self._repair_route(
@@ -887,10 +1056,18 @@ class V2Workflow:
         return update
 
     def generate_script(self, state: V2State) -> dict[str, Any]:
-        """Script Generator Agent: render the controlled pytest adapter."""
+        """Script workflow: render the controlled pytest adapter."""
         script_path = self.output_dir / "generated-tests" / "test_generated_api.py"
-        generate_pytest(script_path)
-        update = self._trace(state, "script_generator", "done", "review_script")
+        key = self._cache_key(
+            "script_generation",
+            {"cases": _file_hash(self.output_dir / "test-cases.json")},
+        )
+        if self.cache.hit("script_generation", key, [script_path]):
+            update = self._trace(state, "script_generator", "cached", "review_script")
+        else:
+            self.script_workflow.generate(self.output_dir)
+            self.cache.store("script_generation", key, [script_path])
+            update = self._trace(state, "script_generator", "done", "review_script")
         update.update(
             self._message(
                 state,
@@ -903,11 +1080,25 @@ class V2Workflow:
         return update
 
     def review_script(self, state: V2State) -> dict[str, Any]:
-        """Script Review Agent: static checks; failures go back to the generator."""
+        """Script workflow review: static checks; failures go back to the generator."""
         cases = read_model(self.output_dir / "test-cases.json", TestCaseDocument)
         script_path = self.output_dir / "generated-tests" / "test_generated_api.py"
-        review = review_generated_script(script_path, cases)
-        write_model(self.output_dir / "script-review.json", review)
+        artifact = self.output_dir / "script-review.json"
+        key = self._cache_key(
+            "script_review",
+            {
+                "cases": _file_hash(self.output_dir / "test-cases.json"),
+                "script": _file_hash(script_path),
+            },
+        )
+        if self.cache.hit("script_review", key, [artifact]):
+            review = read_model(artifact, ScriptReviewReport)
+            review_detail = "cached script review"
+        else:
+            review = self.script_workflow.review(script_path, cases)
+            write_model(artifact, review)
+            self.cache.store("script_review", key, [artifact])
+            review_detail = ""
         approved = review.decision == "approved"
         update = self._message(
             state,
@@ -927,7 +1118,7 @@ class V2Workflow:
                 failure_reason="script review passed after retry",
             )
             update.update(repair_update)
-            update.update(self._trace(state, "review_script", "approved", "contract_gate"))
+            update.update(self._trace(state, "review_script", "approved", "contract_gate", review_detail))
             update["route"] = "approved"
         else:
             route_update = self._repair_route(
@@ -955,7 +1146,7 @@ class V2Workflow:
         baseline = read_model(self.output_dir / "normalized-requirement.json", NormalizedRequirement)
         cases = read_model(self.output_dir / "test-cases.json", TestCaseDocument)
         runtime = normalize_openapi(load_openapi(self.runtime_openapi), self.runtime_openapi)
-        report = compare_contracts(baseline, runtime, cases)
+        report = self.contract_workflow.compare(baseline, runtime, cases)
         write_model(self.output_dir / "contract-diff.json", report)
         update = self._message(
             state,
@@ -1044,7 +1235,7 @@ class V2Workflow:
         merged = TestCaseDocument(requirement_hash=runtime.source_hash, cases=kept + regenerated)
         write_model(self.output_dir / "normalized-requirement.json", runtime)
         write_model(self.output_dir / "test-cases.json", merged)
-        generate_pytest(self.output_dir / "generated-tests" / "test_generated_api.py")
+        self.script_workflow.generate(self.output_dir)
 
         affected_case_ids = sorted(
             {case.case_id for case in old_cases.cases if case.operation_id in affected_operations}
@@ -1078,16 +1269,18 @@ class V2Workflow:
         return update
 
     def execute(self, state: V2State) -> dict[str, Any]:
-        """Executor Agent: run generated tests and collect evidence."""
-        report, returncode = run_pipeline(
+        """Execution workflow: run generated tests and collect evidence."""
+        report, returncode = self.execution_workflow.run(
             self.output_dir,
             self.base_url,
             self.database_url,
             self.runtime_openapi,
             run_id=self.run_id,
-            adapter_name=self.adapter,
+            adapter=self.adapter,
             fixed_accounts=self.fixed_accounts,
             rules_path=self.output_dir / "llm-rules.json",
+            parallel_workers=self.parallel_workers,
+            runner=run_pipeline,
         )
         summary = (
             f"returncode={returncode}, passed={report.summary.passed}, "
@@ -1107,10 +1300,10 @@ class V2Workflow:
         return update
 
     def review_results(self, state: V2State) -> dict[str, Any]:
-        """Result Review Agent: audit evidence; failures re-enter the executor."""
+        """Result workflow: audit evidence; failures re-enter the executor."""
         report = read_model(self.output_dir / "execution-report.json", ExecutionReport)
         evidence_dir = self.output_dir / "evidence" / self.run_id
-        review = review_execution_results(report, evidence_dir, self.logger)
+        review = self.result_workflow.review(report, evidence_dir, self.logger)
         write_model(self.output_dir / "result-review.json", review)
         signature = f"{review.passed}/{review.failed}/{review.inconclusive}"
         approved = review.decision == "approved"

@@ -11,14 +11,14 @@ PyJWT==2.10.1
 
 # 测试（tests/）依赖
 pytest==9.1.1
+pytest-xdist==3.8.0
 requests==2.34.2
 jsonschema==4.26.0
 Faker==40.36.0
 allure-pytest==2.16.0
 
 # V2 多 Agent 工作流编排（LangGraph 负责条件路由、checkpoint 和 interrupt；
-# 节点主要为确定性函数，analyze_requirements 可选使用 LangChain 结构化调用）
+# 节点主要为确定性 Workflow，需求分析由 Agent 内置插件可选调用 LLM）
 langgraph==1.2.11
 langgraph-checkpoint-sqlite==3.1.1
-# 需求拆解 Agent 的 LLM 结构化调用（可选功能：--llm-analysis + .env 配置）
-langchain-openai==1.6.2
+# 需求拆解 Agent 插件直接使用 requests 调用 OpenAI 兼容 API；不再依赖 LangChain

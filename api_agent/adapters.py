@@ -38,6 +38,8 @@ class DomainAdapter:
     cleanup_spec: CleanupSpec | None = None
     # 断言 DSL 可观察表白名单：table -> 主键列（LLM 规则的 table 只能出自这里）
     observable_tables: dict[str, str] = field(default_factory=dict)
+    # 只有明确证明资源隔离安全的 adapter 才允许并行用例执行。
+    parallel_safe: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -364,6 +366,7 @@ def create_executor(
     evidence_dir: Any,
     run_id: str,
     requirement: Any,
+    fixed_accounts: bool | None = None,
 ):
     """Build the adapter's executor; called from the generated pytest."""
     import os
@@ -376,6 +379,10 @@ def create_executor(
         run_id=run_id,
         requirement=requirement,
         cleanup_spec=adapter.cleanup_spec,
-        fixed_accounts=os.environ.get("API_AGENT_FIXED_ACCOUNTS") == "1",
+        fixed_accounts=(
+            os.environ.get("API_AGENT_FIXED_ACCOUNTS") == "1"
+            if fixed_accounts is None
+            else fixed_accounts
+        ),
         observable_tables=adapter.observable_tables,
     )

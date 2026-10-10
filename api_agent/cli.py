@@ -51,6 +51,12 @@ def main(argv: list[str] | None = None) -> int:
     v2_parser.add_argument("--runtime-openapi")
     v2_parser.add_argument("--output", type=Path, default=Path("artifacts/v2"))
     v2_parser.add_argument("--max-repair-attempts", type=int, default=2)
+    v2_parser.add_argument(
+        "--parallel-workers",
+        type=int,
+        default=1,
+        help="Safe execution parallelism; adapters opt in, default is serial",
+    )
     v2_parser.add_argument("--adapter", default="mini_shop", help="Domain adapter: mini_shop, library or meeting")
     v2_parser.add_argument(
         "--fixed-accounts",
@@ -60,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     v2_parser.add_argument(
         "--llm-analysis",
         action="store_true",
-        help="Enable the LangChain requirement analyst (needs LLM_API_KEY/LLM_BASE_URL/LLM_MODEL in .env)",
+        help="Enable the requirement analyst LLM plugin (needs LLM_API_KEY/LLM_BASE_URL/LLM_MODEL in .env)",
     )
     resume_parser = subparsers.add_parser(
         "v2-resume", help="Resume a paused V2 workflow after human review"
@@ -73,6 +79,7 @@ def main(argv: list[str] | None = None) -> int:
     resume_parser.add_argument("--database-url", required=True)
     resume_parser.add_argument("--runtime-openapi")
     resume_parser.add_argument("--max-repair-attempts", type=int, default=2)
+    resume_parser.add_argument("--parallel-workers", type=int, default=1)
     resume_parser.add_argument("--adapter", default="mini_shop")
     resume_parser.add_argument("--fixed-accounts", action="store_true")
     resume_parser.add_argument("--llm-analysis", action="store_true")
@@ -121,6 +128,7 @@ def _run_v2(args: argparse.Namespace) -> int:
         fixed_accounts=args.fixed_accounts,
         llm_analysis=args.llm_analysis,
         run_id=run_id,
+        parallel_workers=args.parallel_workers,
     )
     try:
         result = workflow.invoke()
@@ -164,6 +172,7 @@ def _resume_v2(args: argparse.Namespace) -> int:
         fixed_accounts=args.fixed_accounts,
         llm_analysis=args.llm_analysis,
         run_id=args.run_id,
+        parallel_workers=args.parallel_workers,
     )
     try:
         result = workflow.resume(
@@ -270,6 +279,8 @@ def _v2_summary(
         command.extend(
             [f"--adapter {args.adapter}", f"--max-repair-attempts {args.max_repair_attempts}"]
         )
+        if args.parallel_workers > 1:
+            command.append(f"--parallel-workers {args.parallel_workers}")
         if args.fixed_accounts:
             command.append("--fixed-accounts")
         if args.llm_analysis:

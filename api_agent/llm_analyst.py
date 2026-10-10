@@ -1,42 +1,19 @@
-"""Requirement Analyst Agent: LangChain structured extraction of test rules.
+"""Requirement Analyst Agent with a pluggable direct-HTTP LLM provider.
 
 输入：需求文档全文 + 契约接口清单 + 可观察表白名单。
-输出：LLMRuleSet（声明式规则），经 with_structured_output 强制通过
-Pydantic 校验。LLM 只做"理解与拆解"，所有断言由确定性 DSL 引擎执行。
+输出：LLMRuleSet（声明式规则），经 Pydantic 校验。LLM 只做"理解与拆解"，
+所有断言由确定性 DSL 引擎执行。
 """
 
 from __future__ import annotations
 
 import json
-import time
-
-from api_agent.llm_client import get_chat_model, llm_setting
+from api_agent.llm_client import llm_setting
+from api_agent.llm_plugin import get_requirement_analysis_plugin
 from api_agent.llm_rules import LLMRuleSet
 from api_agent.models import NormalizedRequirement
 
 MAX_DOC_CHARS = 24000
-STRUCTURED_ATTEMPTS = 4
-FALLBACK_ATTEMPTS = 3
-RETRY_BACKOFF_SECONDS = 20
-
-
-class LLMAnalysisError(RuntimeError):
-    """Model analysis failed after the script-controlled retry policy."""
-
-    def __init__(self, attempts: list[dict[str, object]], last_error: Exception | None):
-        self.attempts = attempts
-        detail = "; ".join(
-            f"{item['phase']}#{item['attempt']}: {item.get('reason', 'unknown error')}"
-            for item in attempts
-            if item.get("status") == "failed"
-        )
-        message = f"LLM analysis failed after {len(attempts)} scripted attempts"
-        if detail:
-            message += f": {detail}"
-        elif last_error is not None:
-            message += f": {type(last_error).__name__}: {last_error}"
-        super().__init__(message)
-
 SYSTEM_PROMPT = """你是资深接口测试需求分析师。把需求文档拆解成可执行的业务测试规则。
 
 输出规则字段（严格遵守，多余字段会被丢弃）：
@@ -131,69 +108,10 @@ def analyze_requirements(
         f"# 可观察表白名单（db_assertions.table 只能用这些）\n{tables}\n"
     )
 
-    model = get_chat_model()
-    # 网关兼容性：function_calling 而不是 json_schema（OpenAI 专属强约束）
-    structured = model.with_structured_output(LLMRuleSet, method="function_calling")
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": user_prompt},
-    ]
-    result = None
-    last_error: Exception | None = None
-    attempts: list[dict[str, object]] = []
-    for attempt in range(1, STRUCTURED_ATTEMPTS + 1):
-        record: dict[str, object] = {"phase": "structured", "attempt": attempt}
-        try:
-            result = structured.invoke(messages)
-            if result is not None:
-                record["status"] = "success"
-                attempts.append(record)
-                break
-            record.update({"status": "failed", "reason": "empty model response"})
-        except Exception as exc:  # noqa: BLE001 - 记录最后一次错误后统一退避重试
-            last_error = exc
-            record.update({"status": "failed", "reason": _error_reason(exc)})
-        attempts.append(record)
-        if attempt < STRUCTURED_ATTEMPTS:
-            time.sleep(RETRY_BACKOFF_SECONDS * attempt)
-    if result is None:
-        # 兜底 1：部分网关/模型不回工具调用，改走纯文本 JSON 再人工校验
-        for attempt in range(1, FALLBACK_ATTEMPTS + 1):
-            record = {"phase": "text_json_fallback", "attempt": attempt}
-            try:
-                raw = model.invoke(
-                    [
-                        {"role": "system", "content": SYSTEM_PROMPT + "\n只输出一个 JSON 对象，不要任何其他文字。"},
-                        {"role": "user", "content": user_prompt},
-                    ]
-                )
-                text = str(raw.content)
-                start, end = text.find("{"), text.rfind("}")
-                if start == -1 or end <= start:
-                    raise RuntimeError("LLM response did not contain a JSON object")
-                result = LLMRuleSet.model_validate_json(text[start : end + 1])
-                record["status"] = "success"
-                attempts.append(record)
-                break
-            except Exception as exc:  # noqa: BLE001
-                last_error = exc
-                record.update({"status": "failed", "reason": _error_reason(exc)})
-                attempts.append(record)
-                if attempt < FALLBACK_ATTEMPTS:
-                    time.sleep(RETRY_BACKOFF_SECONDS * attempt)
-    if result is None:
-        raise LLMAnalysisError(attempts, last_error)
+    plugin = get_requirement_analysis_plugin()
+    result, attempts = plugin.analyze(SYSTEM_PROMPT, user_prompt)
     repairs = repair_resource_ids(result)
     return result, repairs, attempts
-
-
-def _error_reason(exc: Exception) -> str:
-    """Keep retry diagnostics useful without dumping an unbounded exception."""
-    detail = str(exc).strip() or "empty exception message"
-    api_key = llm_setting("LLM_API_KEY")
-    if api_key:
-        detail = detail.replace(api_key, "[REDACTED]")
-    return f"{type(exc).__name__}: {detail[:500]}"
 
 
 def analyst_model_name() -> str:

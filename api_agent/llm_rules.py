@@ -1,6 +1,6 @@
 """Pydantic contracts for the LLM requirement analyst.
 
-LLM 的输出被 with_structured_output 强约束为 :class:`LLMRuleSet`。
+LLM 的输出被 Pydantic 校验为 :class:`LLMRuleSet`。
 规则是**声明式**的：setup/action 只允许三个确定性原语，断言只允许
 四种 DSL，由确定性引擎执行——LLM 永远不产生 SQL 或代码。
 

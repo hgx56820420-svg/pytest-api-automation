@@ -2,8 +2,8 @@
 
 This agent is the V2 entry point: the Markdown requirement document is the
 primary source, while OpenAPI remains the machine contract used for review.
-It is deterministic today; when an LLM is available this node can be swapped
-for a LangChain structured-output call without changing the workflow graph.
+It remains deterministic; optional semantic extraction belongs to the
+Requirement Analyst Agent's pluggable LLM provider, not to this parser.
 """
 
 from __future__ import annotations

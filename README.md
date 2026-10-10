@@ -8,11 +8,11 @@
 ## 核心特性
 
 - **需求文档优先**：`REQ-XX-001` 格式的 Markdown 需求文档是主要输入，OpenAPI 退为运行时契约基准
-- **多 Agent 工作流**：LangGraph StateGraph 编排需求解析、审核、用例设计、脚本生成、契约门禁、执行和结果审核节点，Agent 间只传递 Pydantic 校验的消息信封
+- **Workflow + Multi-Agent 分层**：LangGraph StateGraph 只负责路由、checkpoint 和 interrupt；需求、用例、脚本、执行、结果审核等确定性内容由独立 Workflow 承担，Agent 只保留语义分析职责
 - **审核路由回路**：审核失败路由回正确的前置 Agent，不盲目重跑全流程
 - **受限自修复**：修复次数有上限（默认 2 次），每次修复留真实 before/after diff；无进展或超限通过 LangGraph `interrupt` 暂停，人工决定后可从 SQLite checkpoint 恢复
 - **可恢复人工审核**：工作流状态保存在 SQLite checkpoint；`approve`、`retry`、`reject` 通过 `v2-resume` 从同一个 `run_id` 继续、重试或结束为 `NEEDS_HUMAN`
-- **脚本控制模型重试**：LangChain/SDK 不暗中追加重试；LLM 结构化调用最多 4 次，纯文本 JSON 兜底最多 3 次，次数与退避由脚本统一控制并可审计
+- **Agent 内置 LLM 插件**：需求分析 Agent 通过可替换插件直接调用 OpenAI 兼容 API，不依赖 LangChain；结构化调用最多 4 次，纯文本 JSON 兜底最多 3 次，次数与退避由插件统一控制并可审计
 - **失败原因可追溯**：每次审核重试记录失败原因、前后产物 diff 和最终升级原因；LLM 每次调用的阶段、次数、成功/失败及异常摘要写入 `llm-retry-history.json`
 - **契约门禁**：基线与运行时 OpenAPI 比对，破坏性变化触发受影响用例的选择性再生
 - **证据链**：`run_id / case_id / operation_id / request_id` 四方关联，HTTP/数据库 before-after 快照、JSONL 日志、Allure 附件
@@ -25,10 +25,11 @@
      │                                      │
      ▼                                      ▼
 ┌───────────────────── LangGraph StateGraph ─────────────────────┐
-│ 需求解析 → 需求审核 → 用例设计 → 覆盖审核 → 脚本生成 → 脚本审核  │
+│ RequirementWorkflow（Markdown/OpenAPI 并行）→ 需求审核              │
+│ CaseWorkflow → 覆盖审核 → ScriptWorkflow → 脚本审核                 │
 │     ▲          (失败回退到正确前置步骤，受限修复 ≤2 次)         │
 │     │                                                        │
-│     └─ contract_gate ──► executor ──► result_reviewer ──► finalize │
+│     └─ ContractWorkflow ──► ExecutionWorkflow ──► ResultWorkflow      │
 │              ▲                │            │                  │
 │              └─ 选择性再生 ◄───┘      失败进修复回路                  │
 │                                                                 │
@@ -38,7 +39,8 @@
      │
      ▼
 产物：parsed-requirement / test-cases / coverage / contract-diff /
-     execution-report / result-review / workflow-report / repair-history /
+  execution-report / execution-mode / result-review / workflow-report /
+  workflow-cache / repair-history /
      human-review / failure-scene / workflow-input / llm-rules /
      workflow-checkpoints.sqlite3 /
      evidence/<run_id>/*.json + agent-log.jsonl + Allure + JUnit
@@ -104,6 +106,8 @@ python -m api_agent v2-resume `
 ```
 
 `--action` 支持 `approve`、`retry`、`reject`：`approve` 只用于已确认的破坏性契约变更；普通审核失败必须使用 `retry` 或 `reject`。参数必须与首次运行一致，避免从错误的输入恢复。
+
+`--parallel-workers` 只在 Adapter 明确声明 `parallel_safe` 且安装 `pytest-xdist` 时生效；当前业务 Adapter 默认串行，避免共享 SQLite、测试账号和库存状态相互污染。实际模式写入 `execution-mode.json`。
 
 V1 命令（`generate` / `check` / `run` / `pipeline`）保持兼容，见 [`docs/V1_USAGE.md`](docs/V1_USAGE.md)；V2 详细说明见 [`docs/V2_USAGE.md`](docs/V2_USAGE.md)。
 

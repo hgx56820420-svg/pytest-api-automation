@@ -87,7 +87,7 @@ OpenAPI / 需求文档
 
 ### 范围
 
-- LangChain 用于结构化模型调用；LangGraph 用于有分支的工作流。
+- Requirement Analyst Agent 内置插件负责结构化模型调用；LangGraph 用于有分支的工作流编排。
 - 独立的需求审核、用例覆盖审核、脚本审核和结果审核角色。
 - 结构化日志，统一关联 `run_id`、`case_id`、`request_id`、`operation_id`。
 - 测试数据隔离、清理和失败现场保留。
