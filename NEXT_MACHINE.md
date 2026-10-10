@@ -50,6 +50,5 @@ node_modules\.bin\allure.cmd --version
 
 ## 接手原则
 
-- `STATUS.yaml` 是当前状态的首要来源，但要用 Git 和测试命令复核。
-- `question.md` 是已提交的学习记录；本地 `archive/` 中的材料仅作历史参考，不保证代表当前状态。
-- 每次阶段性完成后更新 `STATUS.yaml` 的日期、任务和验证结果，再单独提交。
+- 以 Git 历史、README 和 `docs/` 下的使用说明为当前状态来源，并用实际命令复核。
+- `workflow-checkpoints.sqlite3`、`artifacts/` 和本地环境文件只属于运行产物，不提交到仓库。

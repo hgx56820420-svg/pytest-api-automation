@@ -58,16 +58,23 @@ ARTIFACT_NAMES = [
     "parsed-requirement.json",
     "normalized-requirement.json",
     "requirement-review.json",
+    "workflow-input.json",
     "test-cases.json",
     "coverage-report.json",
     "script-review.json",
     "contract-diff.json",
+    "llm-rules.json",
     "execution-report.json",
     "result-review.json",
     "repair-history.json",
     "human-review.json",
+    "failure-scene.json",
     "workflow-checkpoints.sqlite3",
 ]
+
+
+class WorkflowInputMismatch(ValueError):
+    """Raised when a resume command does not match the original run."""
 
 
 class V2State(TypedDict, total=False):
@@ -75,6 +82,7 @@ class V2State(TypedDict, total=False):
 
     run_id: str
     output_dir: str
+    started_at: str
     route: str
     steps: list[dict[str, Any]]
     messages: list[dict[str, Any]]
@@ -116,6 +124,7 @@ class V2Workflow:
         self.fixed_accounts = fixed_accounts
         self.llm_analysis = llm_analysis
         self.run_id = run_id
+        self.max_repair_attempts = max_repair_attempts
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.repair = RepairManager(output_dir, max_repair_attempts, run_id=run_id)
         self.logger = AgentLogger(output_dir / "evidence" / run_id / "agent-log.jsonl", run_id)
@@ -205,9 +214,12 @@ class V2Workflow:
 
     def invoke(self, initial_state: V2State | None = None) -> dict[str, Any]:
         """Run the graph and return the final merged state."""
+        self._write_workflow_input()
+        started_at = datetime.now(timezone.utc).isoformat()
         state: V2State = {
             "run_id": self.run_id,
             "output_dir": str(self.output_dir),
+            "started_at": started_at,
             "steps": [],
             "messages": [],
             "issues": [],
@@ -218,16 +230,19 @@ class V2Workflow:
         }
         if initial_state:
             state.update(initial_state)
+        self._write_workflow_report(state, status="RUNNING", decision="INCONCLUSIVE")
         result = self.graph.invoke(state, config=self._config())
         if self.pending_interrupt() is not None:
             result["workflow_status"] = "WAITING_HUMAN"
             result["final_decision"] = "NEEDS_HUMAN"
+            self._write_workflow_report(result, status="WAITING_HUMAN")
         else:
             result["workflow_status"] = "COMPLETED"
         return result
 
     def resume(self, decision: HumanReviewDecision | dict[str, Any]) -> dict[str, Any]:
         """Resume the same run after ``human_review`` interrupted it."""
+        self._validate_workflow_input()
         if isinstance(decision, HumanReviewDecision):
             value = decision.model_dump()
         else:
@@ -236,6 +251,7 @@ class V2Workflow:
         if self.pending_interrupt() is not None:
             result["workflow_status"] = "WAITING_HUMAN"
             result["final_decision"] = "NEEDS_HUMAN"
+            self._write_workflow_report(result, status="WAITING_HUMAN")
         else:
             result["workflow_status"] = "COMPLETED"
         return result
@@ -253,6 +269,83 @@ class V2Workflow:
         """Return the persisted interrupt payload, if this run is paused."""
         snapshot = self.graph.get_state(self._config())
         return snapshot.interrupts[0] if snapshot.interrupts else None
+
+    def _workflow_input(self) -> dict[str, Any]:
+        """Return non-secret run parameters used for resume validation."""
+        return {
+            "schema_version": "1.0",
+            "run_id": self.run_id,
+            "openapi_source": self.openapi_source,
+            "requirements_md": str(self.requirements_md),
+            "requirements_hash": _file_hash(self.requirements_md),
+            "base_url": self.base_url,
+            "runtime_openapi": self.runtime_openapi,
+            "database_url_hash": canonical_hash(self.database_url),
+            "max_repair_attempts": self.max_repair_attempts,
+            "adapter": self.adapter,
+            "fixed_accounts": self.fixed_accounts,
+            "llm_analysis": self.llm_analysis,
+        }
+
+    def _write_workflow_input(self) -> None:
+        write_json(self.output_dir / "workflow-input.json", self._workflow_input())
+
+    def _validate_workflow_input(self) -> None:
+        path = self.output_dir / "workflow-input.json"
+        if not path.exists():
+            raise WorkflowInputMismatch(
+                "workflow-input.json is missing; cannot safely resume this run"
+            )
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        current = self._workflow_input()
+        mismatches = [
+            key
+            for key in current
+            if key != "run_id" and saved.get(key) != current[key]
+        ]
+        if saved.get("run_id") != self.run_id:
+            mismatches.append("run_id")
+        if mismatches:
+            raise WorkflowInputMismatch(
+                "resume parameters do not match the original run: " + ", ".join(sorted(set(mismatches)))
+            )
+
+    def _artifact_index(self) -> dict[str, str]:
+        return {
+            name: str(self.output_dir / name)
+            for name in ARTIFACT_NAMES
+            if (self.output_dir / name).exists()
+        }
+
+    def _write_workflow_report(
+        self,
+        state: V2State,
+        *,
+        status: str,
+        decision: str = "NEEDS_HUMAN",
+        finished_at: str = "",
+    ) -> None:
+        """Persist a report while paused, so an interrupted run is inspectable."""
+        existing = self.output_dir / "workflow-report.json"
+        started_at = state.get("started_at", "")
+        if existing.exists():
+            try:
+                previous = read_model(existing, WorkflowRunReport)
+                started_at = started_at or previous.started_at
+            except (OSError, ValueError):
+                pass
+        report = WorkflowRunReport(
+            run_id=self.run_id,
+            started_at=started_at or datetime.now(timezone.utc).isoformat(),
+            finished_at=finished_at,
+            status=status,
+            decision=decision,
+            max_repair_attempts=self.repair.history.max_repair_attempts,
+            steps=state.get("steps", []),
+            artifacts=self._artifact_index(),
+            issues=state.get("issues", []),
+        )
+        write_model(existing, report)
 
     # -- shared helpers -----------------------------------------------------
 
@@ -324,8 +417,10 @@ class V2Workflow:
         return {
             "parse_requirement": "parse_requirement",
             "plan_cases": "design_cases",
+            "design_cases": "design_cases",
             "generate_script": "generate_script",
             "rerun_failed": "execute",
+            "execute": "execute",
             "regenerate_affected": "regenerate_affected",
         }.get(target_step, "finalize")
 
@@ -345,13 +440,17 @@ class V2Workflow:
             "source_step": source_step,
             "resume_target": resume_target,
             "kind": kind,
-            "options": ["approve", "retry", "reject"],
+            "options": ["approve", "reject"] if kind == "contract" else ["retry", "reject"],
             "artifacts": {
                 name: str(self.output_dir / name)
                 for name in ARTIFACT_NAMES
                 if (self.output_dir / name).exists()
             },
         }
+        # ``interrupt`` stops before ``finalize`` runs, so preserve the
+        # failure scene now rather than losing the evidence index while the
+        # run is waiting for a human.
+        self._preserve_failure_scene({**state, **update}, "NEEDS_HUMAN")
         write_json(
             self.output_dir / "human-review.json",
             {
@@ -360,10 +459,6 @@ class V2Workflow:
                 "request": update["pending_human_review"],
             },
         )
-        # ``interrupt`` stops before ``finalize`` runs, so preserve the
-        # failure scene now rather than losing the evidence index while the
-        # run is waiting for a human.
-        self._preserve_failure_scene(state, "NEEDS_HUMAN")
         return update
 
     def human_review(self, state: V2State) -> dict[str, Any]:
@@ -373,8 +468,10 @@ class V2Workflow:
             "source_step": "workflow",
             "resume_target": "finalize",
             "kind": "review",
-            "options": ["approve", "retry", "reject"],
+            "options": ["retry", "reject"],
         }
+        self._preserve_failure_scene(state, "NEEDS_HUMAN", human_reason=str(pending.get("reason", "")))
+        self._write_workflow_report(state, status="WAITING_HUMAN", decision="NEEDS_HUMAN")
         decision = interrupt(pending, response_schema=HumanReviewDecision)
         if not isinstance(decision, HumanReviewDecision):
             decision = HumanReviewDecision.model_validate(decision)
@@ -382,18 +479,30 @@ class V2Workflow:
         target = decision.target_step or str(pending.get("resume_target", "finalize"))
         if decision.action == "retry":
             route = self._repair_target(target)
-            update: dict[str, Any] = {
-                "route": route,
-                "pending_human_review": {},
-                "human_approved": True,
-                "human_rejected": False,
-                "issues": [
-                    issue
-                    for issue in state.get("issues", [])
-                    if issue != pending.get("reason")
-                ],
-            }
-        elif decision.action == "approve":
+            if route == "finalize":
+                update = {
+                    "route": "finalize",
+                    "pending_human_review": {},
+                    "human_approved": False,
+                    "human_rejected": True,
+                    "final_decision": "NEEDS_HUMAN",
+                    "issues": state.get("issues", []) + [
+                        f"invalid retry target: {target}"
+                    ],
+                }
+            else:
+                update = {
+                    "route": route,
+                    "pending_human_review": {},
+                    "human_approved": False,
+                    "human_rejected": False,
+                    "issues": [
+                        issue
+                        for issue in state.get("issues", [])
+                        if issue != pending.get("reason")
+                    ],
+                }
+        elif decision.action == "approve" and pending.get("kind") == "contract":
             # A breaking contract may continue only after approval, and the
             # approved path regenerates affected cases before re-running the gate.
             route = "regenerate_affected" if pending.get("kind") == "contract" else "finalize"
@@ -408,10 +517,27 @@ class V2Workflow:
                     if issue != pending.get("reason")
                 ],
             }
-        if decision.action in {"approve", "retry"}:
+        elif decision.action == "approve":
+            # Approval is reserved for an explicitly identified breaking
+            # contract change.  A failed review must be retried or rejected;
+            # it must never become a silent finalize -> PASS shortcut.
+            update = {
+                "route": "finalize",
+                "pending_human_review": {},
+                "human_approved": False,
+                "human_rejected": True,
+                "final_decision": "NEEDS_HUMAN",
+                "issues": state.get("issues", []) + [
+                    "human approval is only valid for breaking contract changes; use retry or reject"
+                ],
+            }
+        accepted = decision.action == "retry" or (
+            decision.action == "approve" and pending.get("kind") == "contract"
+        )
+        if accepted:
             self.repair.history.escalated_to_human = False
             self.repair.save()
-        else:
+        elif decision.action == "reject":
             update = {
                 "route": "finalize",
                 "pending_human_review": {},
@@ -957,11 +1083,9 @@ class V2Workflow:
         else:
             decision = "NEEDS_HUMAN"
 
-        artifacts = {
-            name: str(self.output_dir / name)
-            for name in ARTIFACT_NAMES
-            if (self.output_dir / name).exists()
-        }
+        if decision != "PASS":
+            self._preserve_failure_scene(state, decision)
+        artifacts = self._artifact_index()
         self.logger.log("step", agent="finalize", detail={"decision": decision, "routed_to": "END"})
         steps = state.get("steps", []) + [
             StepTrace(
@@ -973,7 +1097,9 @@ class V2Workflow:
         ]
         workflow_report = WorkflowRunReport(
             run_id=self.run_id,
+            started_at=state.get("started_at", ""),
             finished_at=datetime.now(timezone.utc).isoformat(),
+            status="COMPLETED",
             decision=decision,
             max_repair_attempts=self.repair.history.max_repair_attempts,
             steps=steps,
@@ -981,8 +1107,6 @@ class V2Workflow:
             issues=state.get("issues", []),
         )
         write_model(self.output_dir / "workflow-report.json", workflow_report)
-        if decision != "PASS":
-            self._preserve_failure_scene(state, decision)
         return {"steps": steps, "final_decision": decision}
 
     def write_error_report(self, exc: BaseException) -> WorkflowRunReport:
@@ -994,15 +1118,6 @@ class V2Workflow:
         reason = f"workflow crashed: {type(exc).__name__}: {exc}"
         self.logger.log("step", agent="workflow", level="error", detail={"error": reason})
         self.repair.escalate(reason)
-        workflow_report = WorkflowRunReport(
-            run_id=self.run_id,
-            finished_at=datetime.now(timezone.utc).isoformat(),
-            decision="NEEDS_HUMAN",
-            max_repair_attempts=self.repair.history.max_repair_attempts,
-            steps=[],
-            issues=[reason],
-        )
-        write_model(self.output_dir / "workflow-report.json", workflow_report)
         scene = {
             "run_id": self.run_id,
             "decision": "NEEDS_HUMAN",
@@ -1013,6 +1128,17 @@ class V2Workflow:
             "agent_log": str((self.output_dir / "evidence" / self.run_id / "agent-log.jsonl").resolve()),
         }
         write_json(self.output_dir / "failure-scene.json", scene)
+        workflow_report = WorkflowRunReport(
+            run_id=self.run_id,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            status="COMPLETED",
+            decision="NEEDS_HUMAN",
+            max_repair_attempts=self.repair.history.max_repair_attempts,
+            artifacts=self._artifact_index(),
+            steps=[],
+            issues=[reason],
+        )
+        write_model(self.output_dir / "workflow-report.json", workflow_report)
         return workflow_report
 
     def _current_run_result_review(self) -> ResultReviewReport | None:
@@ -1026,7 +1152,9 @@ class V2Workflow:
             return None
         return review
 
-    def _preserve_failure_scene(self, state: V2State, decision: str) -> None:
+    def _preserve_failure_scene(
+        self, state: V2State, decision: str, human_reason: str = ""
+    ) -> None:
         failed: list[dict[str, Any]] = []
         review = self._current_run_result_review()
         if review is not None:
@@ -1039,6 +1167,7 @@ class V2Workflow:
             "run_id": self.run_id,
             "decision": decision,
             "escalated_to_human": self.repair.history.escalated_to_human,
+            "human_review_reason": human_reason or (state.get("pending_human_review") or {}).get("reason", ""),
             "issues": state.get("issues", []),
             "failed_cases": failed,
             "evidence_dir": str((self.output_dir / "evidence" / self.run_id).resolve()),

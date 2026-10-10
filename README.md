@@ -37,7 +37,8 @@
      ▼
 产物：parsed-requirement / test-cases / coverage / contract-diff /
      execution-report / result-review / workflow-report / repair-history /
-     human-review / workflow-checkpoints.sqlite3 /
+     human-review / failure-scene / workflow-input / llm-rules /
+     workflow-checkpoints.sqlite3 /
      evidence/<run_id>/*.json + agent-log.jsonl + Allure + JUnit
 ```
 
@@ -94,11 +95,13 @@ python -m api_agent v2-resume `
   --requirements-md docs/MEETING_API_REQUIREMENTS.md `
   --base-url http://127.0.0.1:8030 `
   --database-url sqlite:///./meeting-v2.db `
+  --adapter meeting `
+  --max-repair-attempts 2 `
   --action approve `
   --comment "确认此次契约变更"
 ```
 
-`--action` 支持 `approve`、`retry`、`reject`：批准继续当前人工确认流程；允许机器回到待修复节点重试；或结束为 `NEEDS_HUMAN`。
+`--action` 支持 `approve`、`retry`、`reject`：`approve` 只用于已确认的破坏性契约变更；普通审核失败必须使用 `retry` 或 `reject`。参数必须与首次运行一致，避免从错误的输入恢复。
 
 V1 命令（`generate` / `check` / `run` / `pipeline`）保持兼容，见 [`docs/V1_USAGE.md`](docs/V1_USAGE.md)；V2 详细说明见 [`docs/V2_USAGE.md`](docs/V2_USAGE.md)。
 

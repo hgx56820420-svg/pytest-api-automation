@@ -234,12 +234,13 @@ class StepTrace(StrictModel):
 
 
 class WorkflowRunReport(StrictModel):
-    """Final workflow trace and decision, persisted as workflow-report.json."""
+    """Workflow trace and decision, persisted throughout the run."""
 
     schema_version: Literal["2.0"] = "2.0"
     run_id: str
     started_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     finished_at: str = ""
+    status: Literal["RUNNING", "WAITING_HUMAN", "COMPLETED"] = "RUNNING"
     decision: Literal["PASS", "FAIL", "INCONCLUSIVE", "NEEDS_HUMAN"] = "INCONCLUSIVE"
     max_repair_attempts: int
     steps: list[StepTrace] = Field(default_factory=list)

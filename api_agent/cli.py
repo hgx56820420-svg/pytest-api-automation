@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 
 from api_agent.pipeline import check_contract, generate, run
-from api_agent.workflow import V2Workflow
+from api_agent.workflow import V2Workflow, WorkflowInputMismatch
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -136,26 +136,7 @@ def _run_v2(args: argparse.Namespace) -> int:
         )
         workflow.close()
         return 3
-    report_path = args.output / "workflow-report.json"
-    pending = workflow.pending_interrupt()
-    summary = {
-        "run_id": run_id,
-        "decision": result.get("final_decision", "INCONCLUSIVE"),
-        "workflow_report": str(report_path),
-        "repair_attempts": workflow.repair.attempts,
-        "escalated_to_human": workflow.repair.history.escalated_to_human,
-        "steps": [f"{step['step']}:{step['decision']}->{step['routed_to']}" for step in result.get("steps", [])],
-        "messages": len(result.get("messages", [])),
-    }
-    if pending is not None:
-        summary["status"] = "WAITING_HUMAN"
-        summary["interrupt"] = getattr(pending, "value", pending)
-        summary["resume"] = (
-            f"python -m api_agent v2-resume --run-id {run_id} "
-            f"--output {args.output} --openapi {args.openapi} "
-            f"--requirements-md {args.requirements_md} --base-url {args.base_url} "
-            f"--database-url {args.database_url} --action approve|retry|reject"
-        )
+    summary = _v2_summary(workflow, result, args, run_id)
     _print(summary)
     decision = result.get("final_decision", "INCONCLUSIVE")
     workflow.close()
@@ -186,16 +167,20 @@ def _resume_v2(args: argparse.Namespace) -> int:
             }
         )
         decision = result.get("final_decision", "INCONCLUSIVE")
-        _print(
-            {
-                "run_id": args.run_id,
-                "decision": decision,
-                "workflow_report": str(args.output / "workflow-report.json"),
-                "repair_attempts": workflow.repair.attempts,
-            }
-        )
+        _print(_v2_summary(workflow, result, args, args.run_id))
         return 0 if decision == "PASS" else 3 if decision == "NEEDS_HUMAN" else 1
     except Exception as exc:
+        if isinstance(exc, WorkflowInputMismatch):
+            _print(
+                {
+                    "run_id": args.run_id,
+                    "status": "WAITING_HUMAN",
+                    "decision": "NEEDS_HUMAN",
+                    "workflow_report": str(args.output / "workflow-report.json"),
+                    "error": str(exc),
+                }
+            )
+            return 3
         workflow.write_error_report(exc)
         _print({"run_id": args.run_id, "decision": "NEEDS_HUMAN", "error": str(exc)})
         return 3
@@ -205,6 +190,52 @@ def _resume_v2(args: argparse.Namespace) -> int:
 
 def _print(value: object) -> None:
     print(json.dumps(value, ensure_ascii=False, indent=2, default=str))
+
+
+def _v2_summary(
+    workflow: V2Workflow,
+    result: dict[str, object],
+    args: argparse.Namespace,
+    run_id: str,
+) -> dict[str, object]:
+    """Use one summary shape for initial runs and repeated interruptions."""
+    pending = workflow.pending_interrupt()
+    summary: dict[str, object] = {
+        "run_id": run_id,
+        "status": "WAITING_HUMAN" if pending is not None else result.get("workflow_status", "COMPLETED"),
+        "decision": result.get("final_decision", "INCONCLUSIVE"),
+        "workflow_report": str(args.output / "workflow-report.json"),
+        "repair_attempts": workflow.repair.attempts,
+        "escalated_to_human": workflow.repair.history.escalated_to_human,
+        "steps": [
+            f"{step['step']}:{step['decision']}->{step['routed_to']}"
+            for step in result.get("steps", [])
+        ],
+        "messages": len(result.get("messages", [])),
+    }
+    if pending is not None:
+        summary["interrupt"] = getattr(pending, "value", pending)
+        command = [
+            "python -m api_agent v2-resume",
+            f"--run-id {run_id}",
+            f"--output {args.output}",
+            f"--openapi {args.openapi}",
+            f"--requirements-md {args.requirements_md}",
+            f"--base-url {args.base_url}",
+            f"--database-url {args.database_url}",
+        ]
+        if args.runtime_openapi:
+            command.append(f"--runtime-openapi {args.runtime_openapi}")
+        command.extend(
+            [f"--adapter {args.adapter}", f"--max-repair-attempts {args.max_repair_attempts}"]
+        )
+        if args.fixed_accounts:
+            command.append("--fixed-accounts")
+        if args.llm_analysis:
+            command.append("--llm-analysis")
+        command.append("--action approve|retry|reject")
+        summary["resume"] = " ".join(command)
+    return summary
 
 
 def _execution_summary(report) -> dict[str, object]:

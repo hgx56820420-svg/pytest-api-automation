@@ -10,7 +10,7 @@ V2 在 V1 确定性闭环的基础上，引入 **LangGraph 编排的多 Agent �
   -> 覆盖审核 Agent    审核覆盖缺口，缺口回传用例 Agent       -> coverage-report.json
   -> 脚本生成 Agent    用例 JSON -> pytest                   -> generated-tests/
   -> 脚本审核 Agent    静态检查，不通过回传脚本 Agent         -> script-review.json
-  -> 契约门禁          破坏性变化触发选择性再生               -> contract-diff.json
+  -> 契约门禁          破坏性变化先 interrupt，人工 approve 后选择性再生 -> contract-diff.json
   -> 执行 Agent        真实 HTTP + 数据库证据                 -> execution-report.json
   -> 结果审核 Agent    证据链与 request_id 关联校验           -> result-review.json
   -> 收尾              决策 + 失败现场保留                    -> workflow-report.json
@@ -51,6 +51,12 @@ python -m api_agent v2 `
 python -m api_agent v2-resume `
   --run-id run-xxxxxxxxxxxx `
   --output artifacts/v2 `
+  --openapi http://127.0.0.1:8010/openapi.json `
+  --requirements-md docs/MINI_SHOP_API_REQUIREMENTS.md `
+  --base-url http://127.0.0.1:8010 `
+  --database-url sqlite:///./agent-v2.db `
+  --adapter mini_shop `
+  --max-repair-attempts 2 `
   --action approve `
   --comment "确认此次契约变更"
 ```
@@ -70,9 +76,13 @@ artifacts/v2/
   contract-diff.json           契约门禁
   execution-report.json        机器事实源
   result-review.json           结果审核（V2 新增）
-  workflow-report.json         工作流轨迹与最终决策（V2 新增）
+  workflow-report.json         工作流轨迹与状态（RUNNING/WAITING_HUMAN/COMPLETED）
   repair-history.json          受限修复留档，含 before/after diff（V2 新增）
-  failure-scene.json           失败现场索引（仅失败时）
+  human-review.json             人工中断请求与决定
+  failure-scene.json            失败现场索引（含升级原因）
+  workflow-input.json           首次运行参数快照（恢复时校验，数据库 URL 仅存 hash）
+  llm-rules.json                可选 LangChain 需求分析产物
+  workflow-checkpoints.sqlite3  LangGraph 断点数据库
   evidence/<run_id>/agent-log.jsonl   结构化日志（V2 新增）
   evidence/<run_id>/<case>.json       每用例证据，含 request_id
   generated-tests/ allure-results/ junit.xml pytest.*.log
@@ -89,11 +99,12 @@ artifacts/v2/
 - 自动修复默认最多 2 次（`--max-repair-attempts`）。
 - 修复重跑后产物签名与上次相同（无进展）时立即转人工，不烧完预算。
 - 每次修复在 `repair-history.json` 留档 attempt、trigger、before/after 摘要和 unified diff。
-- 超限后工作流进入 `human_review` 节点，通过 LangGraph `interrupt` 等待人工审核；状态保存在 `workflow-checkpoints.sqlite3`，恢复不需要从头重跑。
+- 超限或无进展后工作流进入 `human_review` 节点，通过 LangGraph `interrupt` 等待人工审核；状态保存在 `workflow-checkpoints.sqlite3`，恢复不需要从头重跑。
+- `workflow-report.json` 在运行中先写 `RUNNING`，中断时写 `WAITING_HUMAN`，最终才写 `COMPLETED`；因此即使尚未恢复，也能看到当前轨迹和失败现场。
 
 ### 契约变化的选择性再生
 
-契约门禁发现破坏性变化时，只重新生成受影响 operation 的用例并合并保留未受影响用例，再生过程记入 `repair-history.json`；修复预算内无法收敛则阻断执行。
+契约门禁发现破坏性变化时，先通过 `interrupt` 请求人工确认；只有 `approve` 后才重新生成受影响 operation 的用例并合并保留未受影响用例，再生过程记入 `repair-history.json`。普通审核失败不能用 `approve` 绕过，只能 `retry` 或 `reject`。
 
 ### 证据关联与日志
 

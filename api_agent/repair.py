@@ -27,7 +27,10 @@ class RepairManager:
                 candidate = RepairHistory.model_validate_json(
                     self.path.read_text(encoding="utf-8")
                 )
-                if not run_id or not candidate.run_id or candidate.run_id == run_id:
+                # A legacy ledger without a run_id cannot be safely associated
+                # with a new run.  Loading it would consume another run's
+                # repair budget and contaminate its diff history.
+                if not run_id or candidate.run_id == run_id:
                     loaded = candidate
             except (OSError, ValueError):
                 # A corrupt ledger must not make the workflow silently lose its
