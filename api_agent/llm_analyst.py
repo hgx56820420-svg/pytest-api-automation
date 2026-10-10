@@ -19,6 +19,24 @@ STRUCTURED_ATTEMPTS = 4
 FALLBACK_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = 20
 
+
+class LLMAnalysisError(RuntimeError):
+    """Model analysis failed after the script-controlled retry policy."""
+
+    def __init__(self, attempts: list[dict[str, object]], last_error: Exception | None):
+        self.attempts = attempts
+        detail = "; ".join(
+            f"{item['phase']}#{item['attempt']}: {item.get('reason', 'unknown error')}"
+            for item in attempts
+            if item.get("status") == "failed"
+        )
+        message = f"LLM analysis failed after {len(attempts)} scripted attempts"
+        if detail:
+            message += f": {detail}"
+        elif last_error is not None:
+            message += f": {type(last_error).__name__}: {last_error}"
+        super().__init__(message)
+
 SYSTEM_PROMPT = """你是资深接口测试需求分析师。把需求文档拆解成可执行的业务测试规则。
 
 输出规则字段（严格遵守，多余字段会被丢弃）：
@@ -99,8 +117,8 @@ def analyze_requirements(
     requirement: NormalizedRequirement,
     requirements_md,
     observable_tables: dict[str, str],
-) -> tuple[LLMRuleSet, list[str]]:
-    """Call the LLM once and return validated rules (or raise)."""
+) -> tuple[LLMRuleSet, list[str], list[dict[str, object]]]:
+    """Call the LLM with a visible, script-controlled retry policy."""
     text = requirements_md.read_text(encoding="utf-8-sig")
     if len(text) > MAX_DOC_CHARS:
         text = text[:MAX_DOC_CHARS] + "\n...(文档已截断)"
@@ -122,18 +140,26 @@ def analyze_requirements(
     ]
     result = None
     last_error: Exception | None = None
+    attempts: list[dict[str, object]] = []
     for attempt in range(1, STRUCTURED_ATTEMPTS + 1):
+        record: dict[str, object] = {"phase": "structured", "attempt": attempt}
         try:
             result = structured.invoke(messages)
             if result is not None:
+                record["status"] = "success"
+                attempts.append(record)
                 break
+            record.update({"status": "failed", "reason": "empty model response"})
         except Exception as exc:  # noqa: BLE001 - 记录最后一次错误后统一退避重试
             last_error = exc
+            record.update({"status": "failed", "reason": _error_reason(exc)})
+        attempts.append(record)
         if attempt < STRUCTURED_ATTEMPTS:
             time.sleep(RETRY_BACKOFF_SECONDS * attempt)
     if result is None:
         # 兜底 1：部分网关/模型不回工具调用，改走纯文本 JSON 再人工校验
         for attempt in range(1, FALLBACK_ATTEMPTS + 1):
+            record = {"phase": "text_json_fallback", "attempt": attempt}
             try:
                 raw = model.invoke(
                     [
@@ -144,17 +170,30 @@ def analyze_requirements(
                 text = str(raw.content)
                 start, end = text.find("{"), text.rfind("}")
                 if start == -1 or end <= start:
-                    raise RuntimeError(f"LLM returned no structured output; raw text: {text[:200]}")
+                    raise RuntimeError("LLM response did not contain a JSON object")
                 result = LLMRuleSet.model_validate_json(text[start : end + 1])
+                record["status"] = "success"
+                attempts.append(record)
                 break
             except Exception as exc:  # noqa: BLE001
                 last_error = exc
+                record.update({"status": "failed", "reason": _error_reason(exc)})
+                attempts.append(record)
                 if attempt < FALLBACK_ATTEMPTS:
                     time.sleep(RETRY_BACKOFF_SECONDS * attempt)
     if result is None:
-        raise RuntimeError(f"LLM analysis failed after retries: {last_error}")
+        raise LLMAnalysisError(attempts, last_error)
     repairs = repair_resource_ids(result)
-    return result, repairs
+    return result, repairs, attempts
+
+
+def _error_reason(exc: Exception) -> str:
+    """Keep retry diagnostics useful without dumping an unbounded exception."""
+    detail = str(exc).strip() or "empty exception message"
+    api_key = llm_setting("LLM_API_KEY")
+    if api_key:
+        detail = detail.replace(api_key, "[REDACTED]")
+    return f"{type(exc).__name__}: {detail[:500]}"
 
 
 def analyst_model_name() -> str:

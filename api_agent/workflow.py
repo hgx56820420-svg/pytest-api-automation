@@ -29,7 +29,7 @@ from langgraph.types import Command, interrupt
 from api_agent.adapters import get_adapter
 from api_agent.agentlog import AgentLogger
 from api_agent.artifacts import read_model, write_json, write_model
-from api_agent.llm_client import is_llm_enabled
+from api_agent.llm_client import is_llm_enabled, llm_setting
 from api_agent.contract import compare_contracts
 from api_agent.generator import generate_pytest, review_generated_script
 from api_agent.models import (
@@ -64,6 +64,7 @@ ARTIFACT_NAMES = [
     "script-review.json",
     "contract-diff.json",
     "llm-rules.json",
+    "llm-retry-history.json",
     "execution-report.json",
     "result-review.json",
     "repair-history.json",
@@ -572,6 +573,7 @@ class V2Workflow:
         artifact: Path,
         *,
         after_signature: str,
+        failure_reason: str = "",
     ) -> tuple[dict[str, Any], bool]:
         """Archive the artifact produced by the previous repair attempt."""
         pending = state.get("pending_repairs", {}).get(loop_key)
@@ -587,6 +589,10 @@ class V2Workflow:
             before=before,
             after=after,
             affected_case_ids=pending.get("affected_case_ids", []),
+            reason=(
+                f"retry triggered by: {pending.get('reason', 'unspecified failure')}; "
+                f"retry result: {failure_reason or 'review still failed'}"
+            ),
         )
         remaining = dict(state.get("pending_repairs", {}))
         remaining.pop(loop_key, None)
@@ -601,6 +607,7 @@ class V2Workflow:
         trigger: str,
         target_step: str,
         signature: str | None = None,
+        failure_reason: str = "",
     ) -> dict[str, Any]:
         """Decide retry vs human for a failed review, with bounded attempts.
 
@@ -613,14 +620,21 @@ class V2Workflow:
         signatures = dict(state.get("prev_signatures", {}))
         update: dict[str, Any] = {"prev_signatures": signatures}
         repair_update, no_progress = self._record_pending_repair(
-            state, loop_key, artifact, after_signature=current_signature
+            state,
+            loop_key,
+            artifact,
+            after_signature=current_signature,
+            failure_reason=failure_reason,
         )
         update.update(repair_update)
         if no_progress or (previous is not None and previous == current_signature):
+            reason = f"{loop_key}: repair produced no progress"
+            if failure_reason:
+                reason += f"; retry still failed: {failure_reason}"
             update.update(
                 self._escalate_for_human(
                     state,
-                    f"{loop_key}: repair produced no progress",
+                    reason,
                     source_step=target_step,
                     resume_target=self._repair_target(target_step),
                 )
@@ -628,10 +642,16 @@ class V2Workflow:
             update["route"] = "human"
             return update
         if self.repair.exhausted:
+            reason = (
+                f"{loop_key}: max repair attempts "
+                f"({self.repair.history.max_repair_attempts}) reached"
+            )
+            if failure_reason:
+                reason += f"; latest failure: {failure_reason}"
             update.update(
                 self._escalate_for_human(
                     state,
-                    f"{loop_key}: max repair attempts ({self.repair.history.max_repair_attempts}) reached",
+                    reason,
                     source_step=target_step,
                     resume_target=self._repair_target(target_step),
                 )
@@ -645,6 +665,7 @@ class V2Workflow:
             "before_signature": current_signature,
             "trigger": trigger,
             "target_step": target_step,
+            "reason": failure_reason,
         }
         update["pending_repairs"] = pending_repairs
         update["route"] = "retry"
@@ -693,6 +714,14 @@ class V2Workflow:
             review.issues,
         )
         if approved:
+            repair_update, _ = self._record_pending_repair(
+                state,
+                "requirement",
+                self.output_dir / "requirement-review.json",
+                after_signature=_file_hash(self.output_dir / "requirement-review.json"),
+                failure_reason="review passed after retry",
+            )
+            update.update(repair_update)
             update.update(self._trace(state, "review_requirement", "approved", "design_cases"))
             update["route"] = "approved"
         else:
@@ -702,6 +731,7 @@ class V2Workflow:
                 artifact=self.output_dir / "requirement-review.json",
                 trigger="requirement_review_failed",
                 target_step="parse_requirement",
+                failure_reason="; ".join(review.issues[:5]),
             )
             update.update(route_update)
             update.update(
@@ -718,6 +748,11 @@ class V2Workflow:
     def analyze_requirements(self, state: V2State) -> dict[str, Any]:
         """LLM 需求拆解节点：显式开启且配置齐全时才调用大模型。"""
         if not (self.llm_analysis and is_llm_enabled()):
+            self._record_llm_retry_history(
+                "skipped",
+                [],
+                "LLM analysis disabled or configuration incomplete",
+            )
             return self._trace(
                 state,
                 "analyze_requirements",
@@ -730,7 +765,7 @@ class V2Workflow:
             from api_agent.llm_analyst import analyze_requirements, analyst_model_name
 
             requirement = read_model(self.output_dir / "normalized-requirement.json", NormalizedRequirement)
-            rules, repairs = analyze_requirements(
+            rules, repairs, retry_attempts = analyze_requirements(
                 requirement,
                 self.requirements_md,
                 get_adapter(self.adapter).observable_tables,
@@ -738,7 +773,14 @@ class V2Workflow:
             rules_doc = rules.model_dump()
             if repairs:
                 rules_doc["repairs"] = repairs
+            rules_doc["retry_attempts"] = retry_attempts
             write_json(self.output_dir / "llm-rules.json", rules_doc)
+            self._record_llm_retry_history("success", retry_attempts)
+            self.logger.log(
+                "llm_retry_summary",
+                agent="requirement_analyst",
+                detail={"status": "success", "attempts": retry_attempts},
+            )
             detail = f"{len(rules.rules)} rules extracted by {analyst_model_name()}"
             if repairs:
                 detail += f", {len(repairs)} deterministic id repairs"
@@ -754,8 +796,21 @@ class V2Workflow:
             )
             return update
         except Exception as exc:  # LLM 失败不阻断确定性覆盖，只记录问题
-            update = self._trace(state, "analyze_requirements", "llm_error", "design_cases", f"{type(exc).__name__}: {exc}")
-            return {"issues": state.get("issues", []) + [f"llm analysis failed: {type(exc).__name__}: {exc}"], **update}
+            attempts = getattr(exc, "attempts", [])
+            error_detail = self._safe_error_detail(exc)
+            self._record_llm_retry_history("failed", attempts, error_detail)
+            self.logger.log(
+                "llm_retry_summary",
+                agent="requirement_analyst",
+                level="error",
+                detail={
+                    "status": "failed",
+                    "attempts": attempts,
+                    "error": error_detail,
+                },
+            )
+            update = self._trace(state, "analyze_requirements", "llm_error", "design_cases", error_detail)
+            return {"issues": state.get("issues", []) + [f"llm analysis failed: {error_detail}"], **update}
 
     def design_cases(self, state: V2State) -> dict[str, Any]:
         """Case Design Agent: plan the standard case JSON from the baseline."""
@@ -800,6 +855,14 @@ class V2Workflow:
             coverage.issues,
         )
         if approved:
+            repair_update, _ = self._record_pending_repair(
+                state,
+                "coverage",
+                self.output_dir / "coverage-report.json",
+                after_signature=_file_hash(self.output_dir / "coverage-report.json"),
+                failure_reason="coverage review passed after retry",
+            )
+            update.update(repair_update)
             update.update(self._trace(state, "review_coverage", "approved", "generate_script"))
             update["route"] = "approved"
         else:
@@ -809,6 +872,7 @@ class V2Workflow:
                 artifact=self.output_dir / "coverage-report.json",
                 trigger="coverage_review_failed",
                 target_step="plan_cases",
+                failure_reason="; ".join(coverage.issues[:5]),
             )
             update.update(route_update)
             update.update(
@@ -855,6 +919,14 @@ class V2Workflow:
             review.issues,
         )
         if approved:
+            repair_update, _ = self._record_pending_repair(
+                state,
+                "script",
+                self.output_dir / "script-review.json",
+                after_signature=_file_hash(self.output_dir / "script-review.json"),
+                failure_reason="script review passed after retry",
+            )
+            update.update(repair_update)
             update.update(self._trace(state, "review_script", "approved", "contract_gate"))
             update["route"] = "approved"
         else:
@@ -864,6 +936,7 @@ class V2Workflow:
                 artifact=self.output_dir / "script-review.json",
                 trigger="script_review_failed",
                 target_step="generate_script",
+                failure_reason="; ".join(review.issues[:5]),
             )
             update.update(route_update)
             update.update(
@@ -897,12 +970,19 @@ class V2Workflow:
             update.update(self._trace(state, "contract_gate", report.status, "execute"))
             update["route"] = "continue"
         elif self.repair.exhausted:
+            contract_reason = (
+                "contract: max repair attempts "
+                f"({self.repair.history.max_repair_attempts}) reached on breaking changes"
+            )
+            if report.changes:
+                contract_reason += "; " + "; ".join(change.detail for change in report.changes)
             update.update(
                 self._escalate_for_human(
                     state,
-                    "contract: max repair attempts reached on breaking changes",
+                    contract_reason,
                     source_step="contract_gate",
-                    resume_target="finalize",
+                    resume_target="regenerate_affected",
+                    kind="contract",
                 )
             )
             update.update(self._trace(state, "contract_gate", report.status, "human"))
@@ -917,6 +997,7 @@ class V2Workflow:
                 target_step="human_review",
                 before=baseline.model_dump(),
                 after=runtime.model_dump(),
+                reason="; ".join(change.detail for change in report.changes),
             )
             update.update(
                 self._escalate_for_human(
@@ -974,6 +1055,10 @@ class V2Workflow:
             before=before,
             after=merged.model_dump(),
             affected_case_ids=affected_case_ids,
+            reason=(
+                "human-approved breaking contract change; regenerated affected "
+                f"operations: {', '.join(sorted(affected_operations))}"
+            ),
         )
         detail = (
             f"regenerated {len(regenerated)} cases "
@@ -1039,6 +1124,14 @@ class V2Workflow:
             review.issues[:5],
         )
         if approved:
+            repair_update, _ = self._record_pending_repair(
+                state,
+                "results",
+                self.output_dir / "result-review.json",
+                after_signature=signature,
+                failure_reason="result review passed after retry",
+            )
+            update.update(repair_update)
             update.update(self._trace(state, "result_reviewer", "approved", "finalize"))
             update["route"] = "approved"
         else:
@@ -1049,6 +1142,9 @@ class V2Workflow:
                 trigger="result_review_failed",
                 target_step="rerun_failed",
                 signature=signature,
+                failure_reason="; ".join(review.issues[:5]) or (
+                    f"failed={review.failed}, inconclusive={review.inconclusive}"
+                ),
             )
             update.update(route_update)
             detail = (
@@ -1115,7 +1211,42 @@ class V2Workflow:
         Without this, a crashed node would leave no workflow-report.json and
         no failure scene, breaking the human-review escalation contract.
         """
-        reason = f"workflow crashed: {type(exc).__name__}: {exc}"
+        error_detail = self._safe_error_detail(exc)
+        reason = f"workflow crashed: {error_detail}"
+        try:
+            snapshot = self.graph.get_state(self._config())
+            checkpoint_state = snapshot.values or {}
+        except Exception:  # noqa: BLE001 - still report the original workflow error
+            checkpoint_state = {}
+
+        retry_artifacts = {
+            "requirement": "requirement-review.json",
+            "coverage": "coverage-report.json",
+            "script": "script-review.json",
+            "results": "result-review.json",
+        }
+        retry_errors: list[str] = []
+        for loop_key, pending in checkpoint_state.get("pending_repairs", {}).items():
+            original_reason = str(pending.get("reason") or "unspecified review failure")
+            retry_error = (
+                f"automatic retry failed before review completed ({loop_key}; "
+                f"target={pending.get('target_step', 'unknown')}); "
+                f"original failure: {original_reason}; retry error: {error_detail}"
+            )
+            retry_errors.append(retry_error)
+            artifact_name = retry_artifacts.get(loop_key)
+            if artifact_name:
+                artifact_path = self.output_dir / artifact_name
+                self.repair.record(
+                    trigger=str(pending.get("trigger") or "automatic_retry_failed"),
+                    target_step=str(pending.get("target_step") or "unknown"),
+                    before=pending.get("before", {}),
+                    after=_read_json(artifact_path) or {},
+                    affected_case_ids=pending.get("affected_case_ids", []),
+                    reason=retry_error,
+                )
+        if retry_errors:
+            reason += "; " + "; ".join(retry_errors)
         self.logger.log("step", agent="workflow", level="error", detail={"error": reason})
         self.repair.escalate(reason)
         scene = {
@@ -1140,6 +1271,61 @@ class V2Workflow:
         )
         write_model(self.output_dir / "workflow-report.json", workflow_report)
         return workflow_report
+
+    def _safe_error_detail(self, exc: BaseException) -> str:
+        """Keep actionable exception details while masking configured secrets."""
+        detail = str(exc).strip() or "empty exception message"
+        for secret in (llm_setting("LLM_API_KEY"), self.database_url):
+            if secret:
+                detail = detail.replace(secret, "[REDACTED]")
+        return f"{type(exc).__name__}: {detail[:1000]}"
+
+    def _record_llm_retry_history(
+        self,
+        status: str,
+        attempts: list[dict[str, object]],
+        reason: str = "",
+    ) -> None:
+        """Append one LLM-node invocation to the current run's audit file."""
+        path = self.output_dir / "llm-retry-history.json"
+        existing: dict[str, Any] = {}
+        if path.exists():
+            try:
+                candidate = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(candidate, dict) and candidate.get("run_id") == self.run_id:
+                    existing = candidate
+            except (OSError, json.JSONDecodeError):
+                existing = {}
+
+        invocations = existing.get("invocations", [])
+        if not isinstance(invocations, list):
+            invocations = []
+        invocation_number = len(invocations) + 1
+        current_attempts = [
+            {**attempt, "invocation": invocation_number}
+            for attempt in attempts
+            if isinstance(attempt, dict)
+        ]
+        all_attempts = existing.get("attempts", [])
+        if not isinstance(all_attempts, list):
+            all_attempts = []
+        invocation: dict[str, Any] = {
+            "invocation": invocation_number,
+            "status": status,
+            "attempts": current_attempts,
+        }
+        if reason:
+            invocation["reason"] = reason
+        invocations.append(invocation)
+        history: dict[str, Any] = {
+            "run_id": self.run_id,
+            "status": status,
+            "invocations": invocations,
+            "attempts": all_attempts + current_attempts,
+        }
+        if reason:
+            history["reason"] = reason
+        write_json(path, history)
 
     def _current_run_result_review(self) -> ResultReviewReport | None:
         """Read result-review.json only when it belongs to this run."""

@@ -57,12 +57,14 @@ class RepairManager:
         before: dict[str, Any],
         after: dict[str, Any],
         affected_case_ids: list[str] | None = None,
+        reason: str = "",
     ) -> RepairAction:
         """Archive one repair attempt with hashes, summaries and a unified diff."""
         action = RepairAction(
             attempt=self.attempts + 1,
             trigger=trigger,
             target_step=target_step,
+            reason=reason,
             affected_case_ids=affected_case_ids or [],
             before_summary={"hash": _hash(before), **_summary(before)},
             after_summary={"hash": _hash(after), **_summary(after)},
@@ -83,6 +85,7 @@ class RepairManager:
                 attempt=self.attempts + 1,
                 trigger=reason or "escalated_to_human",
                 target_step="human_review",
+                reason=reason,
                 before_summary={},
                 after_summary={},
                 diff="",

@@ -82,6 +82,7 @@ artifacts/v2/
   failure-scene.json            失败现场索引（含升级原因）
   workflow-input.json           首次运行参数快照（恢复时校验，数据库 URL 仅存 hash）
   llm-rules.json                可选 LangChain 需求分析产物
+  llm-retry-history.json        LLM 每次尝试的阶段、次数和失败原因
   workflow-checkpoints.sqlite3  LangGraph 断点数据库
   evidence/<run_id>/agent-log.jsonl   结构化日志（V2 新增）
   evidence/<run_id>/<case>.json       每用例证据，含 request_id
@@ -99,6 +100,7 @@ artifacts/v2/
 - 自动修复默认最多 2 次（`--max-repair-attempts`）。
 - 修复重跑后产物签名与上次相同（无进展）时立即转人工，不烧完预算。
 - 每次修复在 `repair-history.json` 留档 attempt、trigger、before/after 摘要和 unified diff。
+- 每次重试计划和修复结果都保留失败原因；如果仍无进展或达到预算上限，人工中断原因包含原始失败原因或最后一次失败原因。
 - 超限或无进展后工作流进入 `human_review` 节点，通过 LangGraph `interrupt` 等待人工审核；状态保存在 `workflow-checkpoints.sqlite3`，恢复不需要从头重跑。
 - `workflow-report.json` 在运行中先写 `RUNNING`，中断时写 `WAITING_HUMAN`，最终才写 `COMPLETED`；因此即使尚未恢复，也能看到当前轨迹和失败现场。
 

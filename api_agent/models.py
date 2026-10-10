@@ -207,6 +207,7 @@ class RepairAction(StrictModel):
     attempt: int
     trigger: str
     target_step: str
+    reason: str = ""
     affected_case_ids: list[str] = Field(default_factory=list)
     before_summary: dict[str, Any] = Field(default_factory=dict)
     after_summary: dict[str, Any] = Field(default_factory=dict)

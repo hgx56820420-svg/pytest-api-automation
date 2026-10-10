@@ -125,13 +125,20 @@ def _run_v2(args: argparse.Namespace) -> int:
     try:
         result = workflow.invoke()
     except Exception as exc:  # degraded report keeps the audit trail intact
-        workflow.write_error_report(exc)
+        report = workflow.write_error_report(exc)
+        error = report.issues[0] if report.issues else "workflow failed; see workflow-report.json"
         _print(
             {
                 "run_id": run_id,
                 "decision": "NEEDS_HUMAN",
                 "workflow_report": str(args.output / "workflow-report.json"),
-                "error": f"{type(exc).__name__}: {exc}",
+                "error": error,
+                "issues": report.issues,
+                "retry_reasons": [
+                    action.reason
+                    for action in workflow.repair.history.repairs
+                    if action.reason
+                ],
             }
         )
         workflow.close()
@@ -181,8 +188,20 @@ def _resume_v2(args: argparse.Namespace) -> int:
                 }
             )
             return 3
-        workflow.write_error_report(exc)
-        _print({"run_id": args.run_id, "decision": "NEEDS_HUMAN", "error": str(exc)})
+        report = workflow.write_error_report(exc)
+        _print(
+            {
+                "run_id": args.run_id,
+                "decision": "NEEDS_HUMAN",
+                "error": report.issues[0] if report.issues else "workflow failed; see workflow-report.json",
+                "issues": report.issues,
+                "retry_reasons": [
+                    action.reason
+                    for action in workflow.repair.history.repairs
+                    if action.reason
+                ],
+            }
+        )
         return 3
     finally:
         workflow.close()
@@ -200,18 +219,40 @@ def _v2_summary(
 ) -> dict[str, object]:
     """Use one summary shape for initial runs and repeated interruptions."""
     pending = workflow.pending_interrupt()
+    llm_history_path = args.output / "llm-retry-history.json"
+    llm_history: dict[str, object] = {}
+    if llm_history_path.exists():
+        try:
+            candidate = json.loads(llm_history_path.read_text(encoding="utf-8"))
+            if isinstance(candidate, dict) and candidate.get("run_id") == run_id:
+                llm_history = candidate
+        except (OSError, json.JSONDecodeError):
+            llm_history = {}
     summary: dict[str, object] = {
         "run_id": run_id,
         "status": "WAITING_HUMAN" if pending is not None else result.get("workflow_status", "COMPLETED"),
         "decision": result.get("final_decision", "INCONCLUSIVE"),
         "workflow_report": str(args.output / "workflow-report.json"),
         "repair_attempts": workflow.repair.attempts,
+        "retry_reasons": [
+            {
+                "attempt": action.attempt,
+                "trigger": action.trigger,
+                "target_step": action.target_step,
+                "reason": action.reason,
+            }
+            for action in workflow.repair.history.repairs
+            if action.reason
+        ],
         "escalated_to_human": workflow.repair.history.escalated_to_human,
         "steps": [
             f"{step['step']}:{step['decision']}->{step['routed_to']}"
             for step in result.get("steps", [])
         ],
         "messages": len(result.get("messages", [])),
+        "issues": result.get("issues", []),
+        "llm_retry_status": llm_history.get("status", "not_recorded"),
+        "llm_attempts": llm_history.get("attempts", []),
     }
     if pending is not None:
         summary["interrupt"] = getattr(pending, "value", pending)
