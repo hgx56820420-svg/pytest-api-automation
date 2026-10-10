@@ -15,6 +15,9 @@ from api_agent.llm_rules import LLMRuleSet
 from api_agent.models import NormalizedRequirement
 
 MAX_DOC_CHARS = 24000
+STRUCTURED_ATTEMPTS = 4
+FALLBACK_ATTEMPTS = 3
+RETRY_BACKOFF_SECONDS = 20
 
 SYSTEM_PROMPT = """你是资深接口测试需求分析师。把需求文档拆解成可执行的业务测试规则。
 
@@ -119,17 +122,18 @@ def analyze_requirements(
     ]
     result = None
     last_error: Exception | None = None
-    for attempt in range(1, 5):  # 免费档高峰期常见 429，耐心跨过限流窗口
+    for attempt in range(1, STRUCTURED_ATTEMPTS + 1):
         try:
             result = structured.invoke(messages)
             if result is not None:
                 break
         except Exception as exc:  # noqa: BLE001 - 记录最后一次错误后统一退避重试
             last_error = exc
-        time.sleep(20 * attempt)
+        if attempt < STRUCTURED_ATTEMPTS:
+            time.sleep(RETRY_BACKOFF_SECONDS * attempt)
     if result is None:
         # 兜底 1：部分网关/模型不回工具调用，改走纯文本 JSON 再人工校验
-        for attempt in range(1, 4):
+        for attempt in range(1, FALLBACK_ATTEMPTS + 1):
             try:
                 raw = model.invoke(
                     [
@@ -145,7 +149,8 @@ def analyze_requirements(
                 break
             except Exception as exc:  # noqa: BLE001
                 last_error = exc
-                time.sleep(20 * attempt)
+                if attempt < FALLBACK_ATTEMPTS:
+                    time.sleep(RETRY_BACKOFF_SECONDS * attempt)
     if result is None:
         raise RuntimeError(f"LLM analysis failed after retries: {last_error}")
     repairs = repair_resource_ids(result)

@@ -12,6 +12,7 @@
 - **审核路由回路**：审核失败路由回正确的前置 Agent，不盲目重跑全流程
 - **受限自修复**：修复次数有上限（默认 2 次），每次修复留真实 before/after diff；无进展或超限通过 LangGraph `interrupt` 暂停，人工决定后可从 SQLite checkpoint 恢复
 - **可恢复人工审核**：工作流状态保存在 SQLite checkpoint；`approve`、`retry`、`reject` 通过 `v2-resume` 从同一个 `run_id` 继续、重试或结束为 `NEEDS_HUMAN`
+- **脚本控制模型重试**：LangChain/SDK 不暗中追加重试；LLM 结构化调用最多 4 次，纯文本 JSON 兜底最多 3 次，次数与退避由脚本统一控制并可审计
 - **契约门禁**：基线与运行时 OpenAPI 比对，破坏性变化触发受影响用例的选择性再生
 - **证据链**：`run_id / case_id / operation_id / request_id` 四方关联，HTTP/数据库 before-after 快照、JSONL 日志、Allure 附件
 - **多被测对象**：adapter 插件机制，接入新服务只需注册一个 `DomainAdapter`，框架层零改动

@@ -16,7 +16,7 @@ V2 在 V1 确定性闭环的基础上，引入 **LangGraph 编排的多 Agent �
   -> 收尾              决策 + 失败现场保留                    -> workflow-report.json
 ```
 
-Agent 之间只传递经过 Pydantic 校验的消息信封（`AgentMessage`：`from/to/topic/payload_ref/payload_hash`），payload 以产物文件为引用，可独立审计。除可选的 `analyze_requirements` 外，节点主要是确定性实现；该节点在显式传入 `--llm-analysis` 且 LLM 配置完整时使用 LangChain 结构化调用。工作流使用 SQLite checkpoint 保存状态，人工升级进入 `interrupt`，可用同一 `run_id` 从断点恢复。
+Agent 之间只传递经过 Pydantic 校验的消息信封（`AgentMessage`：`from/to/topic/payload_ref/payload_hash`），payload 以产物文件为引用，可独立审计。除可选的 `analyze_requirements` 外，节点主要是确定性实现；该节点在显式传入 `--llm-analysis` 且 LLM 配置完整时使用 LangChain 结构化调用。LLM SDK 自动重试已关闭，模型调用次数和退避由脚本显式控制：结构化调用最多 4 次，失败后纯文本 JSON 兜底最多 3 次。工作流使用 SQLite checkpoint 保存状态，人工升级进入 `interrupt`，可用同一 `run_id` 从断点恢复。
 
 ## 1. 启动独立测试服务
 

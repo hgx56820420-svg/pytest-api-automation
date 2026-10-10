@@ -42,7 +42,12 @@ def is_llm_enabled() -> bool:
 
 
 def get_chat_model():
-    """Build a LangChain ChatOpenAI bound to the configured gateway."""
+    """Build a LangChain ChatOpenAI bound to the configured gateway.
+
+    Retry policy deliberately lives in ``llm_analyst.py``.  Setting the SDK
+    retry budget to zero prevents LangChain/OpenAI from silently adding extra
+    attempts that would not appear in the workflow audit trail.
+    """
     import re
 
     from langchain_openai import ChatOpenAI
@@ -57,5 +62,5 @@ def get_chat_model():
         model=llm_setting("LLM_MODEL"),
         temperature=0,
         timeout=180,
-        max_retries=6,  # 免费档高峰期常见 429，依赖 SDK 指数退避
+        max_retries=0,
     )
