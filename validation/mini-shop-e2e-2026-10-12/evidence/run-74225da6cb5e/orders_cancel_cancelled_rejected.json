@@ -1,0 +1,107 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "orders.cancel.cancelled.rejected",
+  "operation_id": "cancel_order_api_orders__order_id__cancel_post",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-4dd8030d",
+  "request": {
+    "method": "POST",
+    "path": "/api/orders/8/cancel",
+    "json": null,
+    "params": null
+  },
+  "response": {
+    "status_code": 409,
+    "json": {
+      "detail": "Cannot cancel an order in status 'cancelled'"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {
+    "order": {
+      "id": 8,
+      "user_id": 29,
+      "product_id": 18,
+      "quantity": 1,
+      "amount": 10.0,
+      "status": "cancelled"
+    },
+    "product": {
+      "id": 18,
+      "name": "agent-product-64964d24",
+      "price": 10.0,
+      "stock": 5,
+      "status": "on_sale"
+    }
+  },
+  "database_after": {
+    "order": {
+      "id": 8,
+      "user_id": 29,
+      "product_id": 18,
+      "quantity": 1,
+      "amount": 10.0,
+      "status": "cancelled"
+    },
+    "product": {
+      "id": 18,
+      "name": "agent-product-64964d24",
+      "price": 10.0,
+      "stock": 5,
+      "status": "on_sale"
+    }
+  },
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        409
+      ],
+      "actual": 409,
+      "detail": ""
+    },
+    {
+      "name": "state_unchanged",
+      "status": "passed",
+      "expected": {
+        "order": {
+          "id": 8,
+          "user_id": 29,
+          "product_id": 18,
+          "quantity": 1,
+          "amount": 10.0,
+          "status": "cancelled"
+        },
+        "product": {
+          "id": 18,
+          "name": "agent-product-64964d24",
+          "price": 10.0,
+          "stock": 5,
+          "status": "on_sale"
+        }
+      },
+      "actual": {
+        "order": {
+          "id": 8,
+          "user_id": 29,
+          "product_id": 18,
+          "quantity": 1,
+          "amount": 10.0,
+          "status": "cancelled"
+        },
+        "product": {
+          "id": 18,
+          "name": "agent-product-64964d24",
+          "price": 10.0,
+          "stock": 5,
+          "status": "on_sale"
+        }
+      },
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:40Z",
+  "duration_ms": 178
+}

@@ -1,0 +1,203 @@
+{
+  "schema_version": "1.0",
+  "decision": "approved",
+  "operations_total": 22,
+  "operations_covered": 22,
+  "cases_total": 38,
+  "business_assertions_total": 64,
+  "items": [
+    {
+      "operation_id": "login_api_auth_login_post",
+      "case_ids": [
+        "operation.login_api_auth_login_post",
+        "auth.login.wrong_password.rejected"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "me_api_auth_me_get",
+      "case_ids": [
+        "operation.me_api_auth_me_get",
+        "auth.me.missing_token.rejected"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "register_api_auth_register_post",
+      "case_ids": [
+        "operation.register_api_auth_register_post",
+        "auth.register.boundaries",
+        "auth.register.duplicate.rejected"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "clear_cart_api_cart_delete",
+      "case_ids": [
+        "operation.clear_cart_api_cart_delete"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "get_cart_api_cart_get",
+      "case_ids": [
+        "operation.get_cart_api_cart_get"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "add_cart_item_api_cart_items_post",
+      "case_ids": [
+        "operation.add_cart_item_api_cart_items_post"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "remove_cart_item_api_cart_items__product_id__delete",
+      "case_ids": [
+        "operation.remove_cart_item_api_cart_items__product_id__delete"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "update_cart_item_api_cart_items__product_id__put",
+      "case_ids": [
+        "operation.update_cart_item_api_cart_items__product_id__put"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "list_coupons_api_coupons_get",
+      "case_ids": [
+        "operation.list_coupons_api_coupons_get"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "create_coupon_api_coupons_post",
+      "case_ids": [
+        "operation.create_coupon_api_coupons_post"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "transactions_api_inventory__product_id__transactions_get",
+      "case_ids": [
+        "operation.transactions_api_inventory__product_id__transactions_get"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "list_my_orders_api_orders_get",
+      "case_ids": [
+        "operation.list_my_orders_api_orders_get"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "create_order_api_orders_post",
+      "case_ids": [
+        "operation.create_order_api_orders_post",
+        "orders.create.product_not_found",
+        "orders.create.invalid_quantity",
+        "orders.create.insufficient_stock.no_side_effect",
+        "orders.create.insufficient_balance.no_side_effect"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "get_order_api_orders__order_id__get",
+      "case_ids": [
+        "operation.get_order_api_orders__order_id__get",
+        "orders.get.other_user.hidden"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "cancel_order_api_orders__order_id__cancel_post",
+      "case_ids": [
+        "operation.cancel_order_api_orders__order_id__cancel_post",
+        "orders.cancel.paid.rejected",
+        "orders.cancel.cancelled.rejected"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "pay_order_api_orders__order_id__pay_post",
+      "case_ids": [
+        "operation.pay_order_api_orders__order_id__pay_post",
+        "orders.pay.twice.rejected"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "list_products_api_products_get",
+      "case_ids": [
+        "operation.list_products_api_products_get",
+        "products.list.invalid_pagination"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "create_product_api_products_post",
+      "case_ids": [
+        "operation.create_product_api_products_post",
+        "products.create.missing_token.rejected",
+        "products.create.invalid_price"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "offline_product_api_products__product_id__delete",
+      "case_ids": [
+        "operation.offline_product_api_products__product_id__delete"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "get_product_api_products__product_id__get",
+      "case_ids": [
+        "operation.get_product_api_products__product_id__get",
+        "products.get.not_found"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "update_product_api_products__product_id__put",
+      "case_ids": [
+        "operation.update_product_api_products__product_id__put"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    },
+    {
+      "operation_id": "health_health_get",
+      "case_ids": [
+        "operation.health_health_get"
+      ],
+      "status": "covered",
+      "missing_assertions": []
+    }
+  ],
+  "issues": []
+}

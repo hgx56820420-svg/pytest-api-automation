@@ -1,0 +1,94 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "orders.create.invalid_quantity",
+  "operation_id": "create_order_api_orders_post",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-5759cf02",
+  "request": {
+    "method": "POST",
+    "path": "/api/orders",
+    "json": {
+      "product_id": 16,
+      "quantity": 0
+    },
+    "params": null
+  },
+  "response": {
+    "status_code": 422,
+    "json": {
+      "detail": [
+        {
+          "type": "greater_than",
+          "loc": [
+            "body",
+            "quantity"
+          ],
+          "msg": "Input should be greater than 0",
+          "input": 0,
+          "ctx": {
+            "gt": 0
+          }
+        }
+      ]
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {
+    "user": {
+      "id": 27,
+      "username": "agent_1a7510e37a3c",
+      "balance": 1000.0
+    },
+    "product": {
+      "id": 16,
+      "name": "agent-product-510008cd",
+      "price": 10.0,
+      "stock": 5,
+      "status": "on_sale"
+    },
+    "order_count": 6
+  },
+  "database_after": {
+    "user": {
+      "id": 27,
+      "username": "agent_1a7510e37a3c",
+      "balance": 1000.0
+    },
+    "product": {
+      "id": 16,
+      "name": "agent-product-510008cd",
+      "price": 10.0,
+      "stock": 5,
+      "status": "on_sale"
+    },
+    "order_count": 6
+  },
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        422
+      ],
+      "actual": 422,
+      "detail": ""
+    },
+    {
+      "name": "response_schema",
+      "status": "passed",
+      "expected": "OpenAPI schema",
+      "actual": "valid",
+      "detail": ""
+    },
+    {
+      "name": "order_not_created",
+      "status": "passed",
+      "expected": 6,
+      "actual": 6,
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:39Z",
+  "duration_ms": 146
+}

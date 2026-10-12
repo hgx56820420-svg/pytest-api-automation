@@ -1,0 +1,127 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "operation.list_products_api_products_get",
+  "operation_id": "list_products_api_products_get",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-a4cc816a",
+  "request": {
+    "method": "GET",
+    "path": "/api/products",
+    "json": null,
+    "params": null
+  },
+  "response": {
+    "status_code": 200,
+    "json": {
+      "total": 11,
+      "page": 1,
+      "size": 10,
+      "items": [
+        {
+          "id": 1,
+          "name": "agent-product-2c8343a9",
+          "price": 10.0,
+          "stock": 10,
+          "status": "on_sale",
+          "created_at": "2026-10-12T03:53:36.028490"
+        },
+        {
+          "id": 2,
+          "name": "agent-product-241aec86",
+          "price": 10.0,
+          "stock": 10,
+          "status": "on_sale",
+          "created_at": "2026-10-12T03:53:36.210529"
+        },
+        {
+          "id": 3,
+          "name": "agent-product-c3badbb4",
+          "price": 10.0,
+          "stock": 10,
+          "status": "on_sale",
+          "created_at": "2026-10-12T03:53:36.386976"
+        },
+        {
+          "id": 4,
+          "name": "agent-product-f10650c4",
+          "price": 10.0,
+          "stock": 10,
+          "status": "on_sale",
+          "created_at": "2026-10-12T03:53:36.545946"
+        },
+        {
+          "id": 5,
+          "name": "agent-product-294ba97c",
+          "price": 10.0,
+          "stock": 10,
+          "status": "on_sale",
+          "created_at": "2026-10-12T03:53:36.751463"
+        },
+        {
+          "id": 6,
+          "name": "agent-product-940824db",
+          "price": 10.0,
+          "stock": 10,
+          "status": "on_sale",
+          "created_at": "2026-10-12T03:53:37.223421"
+        },
+        {
+          "id": 7,
+          "name": "agent-product-5c40e1b9",
+          "price": 10.0,
+          "stock": 4,
+          "status": "on_sale",
+          "created_at": "2026-10-12T03:53:37.429508"
+        },
+        {
+          "id": 8,
+          "name": "agent-product-07ce4b53",
+          "price": 10.0,
+          "stock": 3,
+          "status": "on_sale",
+          "created_at": "2026-10-12T03:53:37.602308"
+        },
+        {
+          "id": 9,
+          "name": "agent-product-af491712",
+          "price": 10.0,
+          "stock": 4,
+          "status": "on_sale",
+          "created_at": "2026-10-12T03:53:37.780164"
+        },
+        {
+          "id": 10,
+          "name": "agent-product-79d2770c",
+          "price": 10.0,
+          "stock": 5,
+          "status": "on_sale",
+          "created_at": "2026-10-12T03:53:37.958336"
+        }
+      ]
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {},
+  "database_after": {},
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        200
+      ],
+      "actual": 200,
+      "detail": ""
+    },
+    {
+      "name": "response_schema",
+      "status": "passed",
+      "expected": "OpenAPI schema",
+      "actual": "valid",
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:38Z",
+  "duration_ms": 14
+}

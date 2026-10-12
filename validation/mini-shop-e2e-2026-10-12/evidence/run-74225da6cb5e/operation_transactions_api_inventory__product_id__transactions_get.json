@@ -1,0 +1,113 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "operation.transactions_api_inventory__product_id__transactions_get",
+  "operation_id": "transactions_api_inventory__product_id__transactions_get",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-40162c98",
+  "request": {
+    "method": "GET",
+    "path": "/api/inventory/6/transactions",
+    "json": null,
+    "params": null
+  },
+  "response": {
+    "status_code": 200,
+    "json": [
+      {
+        "id": 1,
+        "product_id": 6,
+        "quantity_change": -2,
+        "reason": "order_created",
+        "reference_id": null,
+        "created_at": "2026-10-12T03:53:37.239244"
+      },
+      {
+        "id": 2,
+        "product_id": 6,
+        "quantity_change": 2,
+        "reason": "order_cancelled",
+        "reference_id": 1,
+        "created_at": "2026-10-12T03:53:37.265081"
+      }
+    ],
+    "content_type": "application/json"
+  },
+  "database_before": {
+    "inventory_transactions": [],
+    "product": {
+      "id": 6,
+      "name": "agent-product-940824db",
+      "price": 10.0,
+      "stock": 10,
+      "status": "on_sale"
+    }
+  },
+  "database_after": {
+    "inventory_transactions": [
+      {
+        "id": 1,
+        "product_id": 6,
+        "quantity_change": -2,
+        "reason": "order_created",
+        "reference_id": null
+      },
+      {
+        "id": 2,
+        "product_id": 6,
+        "quantity_change": 2,
+        "reason": "order_cancelled",
+        "reference_id": 1
+      }
+    ],
+    "product": {
+      "id": 6,
+      "name": "agent-product-940824db",
+      "price": 10.0,
+      "stock": 10,
+      "status": "on_sale"
+    }
+  },
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        200
+      ],
+      "actual": 200,
+      "detail": ""
+    },
+    {
+      "name": "response_schema",
+      "status": "passed",
+      "expected": "OpenAPI schema",
+      "actual": "valid",
+      "detail": ""
+    },
+    {
+      "name": "inventory_evidence",
+      "status": "passed",
+      "expected": "-2 then +2",
+      "actual": [
+        {
+          "id": 1,
+          "product_id": 6,
+          "quantity_change": -2,
+          "reason": "order_created",
+          "reference_id": null
+        },
+        {
+          "id": 2,
+          "product_id": 6,
+          "quantity_change": 2,
+          "reason": "order_cancelled",
+          "reference_id": 1
+        }
+      ],
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:37Z",
+  "duration_ms": 187
+}

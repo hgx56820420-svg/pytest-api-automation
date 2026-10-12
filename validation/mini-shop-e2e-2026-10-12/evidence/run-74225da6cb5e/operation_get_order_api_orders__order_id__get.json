@@ -1,0 +1,57 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "operation.get_order_api_orders__order_id__get",
+  "operation_id": "get_order_api_orders__order_id__get",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-2669f648",
+  "request": {
+    "method": "GET",
+    "path": "/api/orders/4",
+    "json": null,
+    "params": null
+  },
+  "response": {
+    "status_code": 200,
+    "json": {
+      "id": 4,
+      "user_id": 14,
+      "product_id": 9,
+      "quantity": 1,
+      "amount": 10.0,
+      "coupon_code": null,
+      "status": "created",
+      "created_at": "2026-10-12T03:53:37.799020"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {},
+  "database_after": {},
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        200
+      ],
+      "actual": 200,
+      "detail": ""
+    },
+    {
+      "name": "response_schema",
+      "status": "passed",
+      "expected": "OpenAPI schema",
+      "actual": "valid",
+      "detail": ""
+    },
+    {
+      "name": "order_matches",
+      "status": "passed",
+      "expected": 4,
+      "actual": 4,
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:37Z",
+  "duration_ms": 177
+}

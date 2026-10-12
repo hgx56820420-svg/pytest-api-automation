@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "orders.pay.twice.rejected",
+  "operation_id": "pay_order_api_orders__order_id__pay_post",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-8730b3fe",
+  "request": {
+    "method": "POST",
+    "path": "/api/orders/10/pay",
+    "json": null,
+    "params": null
+  },
+  "response": {
+    "status_code": 409,
+    "json": {
+      "detail": "Cannot pay an order in status 'paid'"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {
+    "order": {
+      "id": 10,
+      "user_id": 34,
+      "product_id": 22,
+      "quantity": 1,
+      "amount": 10.0,
+      "status": "paid"
+    }
+  },
+  "database_after": {
+    "order": {
+      "id": 10,
+      "user_id": 34,
+      "product_id": 22,
+      "quantity": 1,
+      "amount": 10.0,
+      "status": "paid"
+    }
+  },
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        409
+      ],
+      "actual": 409,
+      "detail": ""
+    },
+    {
+      "name": "order_status_paid",
+      "status": "passed",
+      "expected": "paid",
+      "actual": "paid",
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:40Z",
+  "duration_ms": 160
+}

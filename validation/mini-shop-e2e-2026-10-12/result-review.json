@@ -1,0 +1,316 @@
+{
+  "schema_version": "2.0",
+  "run_id": "run-74225da6cb5e",
+  "decision": "approved",
+  "cases_total": 38,
+  "passed": 38,
+  "failed": 0,
+  "inconclusive": 0,
+  "verdicts": [
+    {
+      "case_id": "operation.login_api_auth_login_post",
+      "operation_id": "login_api_auth_login_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.me_api_auth_me_get",
+      "operation_id": "me_api_auth_me_get",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.register_api_auth_register_post",
+      "operation_id": "register_api_auth_register_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.clear_cart_api_cart_delete",
+      "operation_id": "clear_cart_api_cart_delete",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.get_cart_api_cart_get",
+      "operation_id": "get_cart_api_cart_get",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.add_cart_item_api_cart_items_post",
+      "operation_id": "add_cart_item_api_cart_items_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.remove_cart_item_api_cart_items__product_id__delete",
+      "operation_id": "remove_cart_item_api_cart_items__product_id__delete",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.update_cart_item_api_cart_items__product_id__put",
+      "operation_id": "update_cart_item_api_cart_items__product_id__put",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.list_coupons_api_coupons_get",
+      "operation_id": "list_coupons_api_coupons_get",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.create_coupon_api_coupons_post",
+      "operation_id": "create_coupon_api_coupons_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.transactions_api_inventory__product_id__transactions_get",
+      "operation_id": "transactions_api_inventory__product_id__transactions_get",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.list_my_orders_api_orders_get",
+      "operation_id": "list_my_orders_api_orders_get",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.create_order_api_orders_post",
+      "operation_id": "create_order_api_orders_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.get_order_api_orders__order_id__get",
+      "operation_id": "get_order_api_orders__order_id__get",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.cancel_order_api_orders__order_id__cancel_post",
+      "operation_id": "cancel_order_api_orders__order_id__cancel_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.pay_order_api_orders__order_id__pay_post",
+      "operation_id": "pay_order_api_orders__order_id__pay_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.list_products_api_products_get",
+      "operation_id": "list_products_api_products_get",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.create_product_api_products_post",
+      "operation_id": "create_product_api_products_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.offline_product_api_products__product_id__delete",
+      "operation_id": "offline_product_api_products__product_id__delete",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.get_product_api_products__product_id__get",
+      "operation_id": "get_product_api_products__product_id__get",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.update_product_api_products__product_id__put",
+      "operation_id": "update_product_api_products__product_id__put",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "operation.health_health_get",
+      "operation_id": "health_health_get",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "auth.register.boundaries",
+      "operation_id": "register_api_auth_register_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "auth.register.duplicate.rejected",
+      "operation_id": "register_api_auth_register_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "auth.login.wrong_password.rejected",
+      "operation_id": "login_api_auth_login_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "auth.me.missing_token.rejected",
+      "operation_id": "me_api_auth_me_get",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "products.create.missing_token.rejected",
+      "operation_id": "create_product_api_products_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "products.get.not_found",
+      "operation_id": "get_product_api_products__product_id__get",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "products.create.invalid_price",
+      "operation_id": "create_product_api_products_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "products.list.invalid_pagination",
+      "operation_id": "list_products_api_products_get",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "orders.create.product_not_found",
+      "operation_id": "create_order_api_orders_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "orders.create.invalid_quantity",
+      "operation_id": "create_order_api_orders_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "orders.cancel.paid.rejected",
+      "operation_id": "cancel_order_api_orders__order_id__cancel_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "orders.cancel.cancelled.rejected",
+      "operation_id": "cancel_order_api_orders__order_id__cancel_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "orders.get.other_user.hidden",
+      "operation_id": "get_order_api_orders__order_id__get",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "orders.create.insufficient_stock.no_side_effect",
+      "operation_id": "create_order_api_orders_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "orders.create.insufficient_balance.no_side_effect",
+      "operation_id": "create_order_api_orders_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    },
+    {
+      "case_id": "orders.pay.twice.rejected",
+      "operation_id": "pay_order_api_orders__order_id__pay_post",
+      "status": "passed",
+      "evidence_present": true,
+      "request_id_correlated": true,
+      "issues": []
+    }
+  ],
+  "issues": []
+}

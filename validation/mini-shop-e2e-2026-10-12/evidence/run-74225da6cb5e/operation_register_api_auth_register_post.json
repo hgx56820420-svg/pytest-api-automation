@@ -1,0 +1,49 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "operation.register_api_auth_register_post",
+  "operation_id": "register_api_auth_register_post",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-033484fb",
+  "request": {
+    "method": "POST",
+    "path": "/api/auth/register",
+    "json": {
+      "username": "agent_75b399eaa2a1",
+      "password": "[REDACTED]"
+    },
+    "params": null
+  },
+  "response": {
+    "status_code": 201,
+    "json": {
+      "id": 3,
+      "username": "agent_75b399eaa2a1",
+      "balance": 1000.0,
+      "created_at": "2026-10-12T03:53:35.876914"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {},
+  "database_after": {},
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        201
+      ],
+      "actual": 201,
+      "detail": ""
+    },
+    {
+      "name": "response_schema",
+      "status": "passed",
+      "expected": "OpenAPI schema",
+      "actual": "valid",
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:35Z",
+  "duration_ms": 70
+}

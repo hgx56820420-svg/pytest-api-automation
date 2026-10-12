@@ -1,0 +1,61 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "operation.remove_cart_item_api_cart_items__product_id__delete",
+  "operation_id": "remove_cart_item_api_cart_items__product_id__delete",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-badd4dd0",
+  "request": {
+    "method": "DELETE",
+    "path": "/api/cart/items/4",
+    "json": null,
+    "params": null
+  },
+  "response": {
+    "status_code": 200,
+    "json": {
+      "items": []
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {
+    "cart_items": [
+      {
+        "id": 3,
+        "user_id": 7,
+        "product_id": 4,
+        "quantity": 1
+      }
+    ]
+  },
+  "database_after": {
+    "cart_items": []
+  },
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        200
+      ],
+      "actual": 200,
+      "detail": ""
+    },
+    {
+      "name": "response_schema",
+      "status": "passed",
+      "expected": "OpenAPI schema",
+      "actual": "valid",
+      "detail": ""
+    },
+    {
+      "name": "cart_item_removed",
+      "status": "passed",
+      "expected": [],
+      "actual": [],
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:36Z",
+  "duration_ms": 170
+}

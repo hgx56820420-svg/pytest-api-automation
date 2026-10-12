@@ -1,0 +1,110 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "operation.create_order_api_orders_post",
+  "operation_id": "create_order_api_orders_post",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-b644b770",
+  "request": {
+    "method": "POST",
+    "path": "/api/orders",
+    "json": {
+      "product_id": 8,
+      "quantity": 2
+    },
+    "params": null
+  },
+  "response": {
+    "status_code": 201,
+    "json": {
+      "id": 3,
+      "user_id": 13,
+      "product_id": 8,
+      "quantity": 2,
+      "amount": 20.0,
+      "coupon_code": null,
+      "status": "created",
+      "created_at": "2026-10-12T03:53:37.617763"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {
+    "user": {
+      "id": 13,
+      "username": "agent_35bdaefe5010",
+      "balance": 1000.0
+    },
+    "product": {
+      "id": 8,
+      "name": "agent-product-07ce4b53",
+      "price": 10.0,
+      "stock": 5,
+      "status": "on_sale"
+    },
+    "order_count": 2
+  },
+  "database_after": {
+    "user": {
+      "id": 13,
+      "username": "agent_35bdaefe5010",
+      "balance": 980.0
+    },
+    "product": {
+      "id": 8,
+      "name": "agent-product-07ce4b53",
+      "price": 10.0,
+      "stock": 3,
+      "status": "on_sale"
+    },
+    "order": {
+      "id": 3,
+      "user_id": 13,
+      "product_id": 8,
+      "quantity": 2,
+      "amount": 20.0,
+      "status": "created"
+    },
+    "order_count": 3
+  },
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        201
+      ],
+      "actual": 201,
+      "detail": ""
+    },
+    {
+      "name": "response_schema",
+      "status": "passed",
+      "expected": "OpenAPI schema",
+      "actual": "valid",
+      "detail": ""
+    },
+    {
+      "name": "order_created",
+      "status": "passed",
+      "expected": 3,
+      "actual": 3,
+      "detail": ""
+    },
+    {
+      "name": "inventory_decreased",
+      "status": "passed",
+      "expected": 3,
+      "actual": 3,
+      "detail": ""
+    },
+    {
+      "name": "balance_decreased",
+      "status": "passed",
+      "expected": 980.0,
+      "actual": 980.0,
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:37Z",
+  "duration_ms": 162
+}

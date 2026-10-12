@@ -1,0 +1,127 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "operation.cancel_order_api_orders__order_id__cancel_post",
+  "operation_id": "cancel_order_api_orders__order_id__cancel_post",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-ab90ee4f",
+  "request": {
+    "method": "POST",
+    "path": "/api/orders/5/cancel",
+    "json": null,
+    "params": null
+  },
+  "response": {
+    "status_code": 200,
+    "json": {
+      "id": 5,
+      "user_id": 15,
+      "product_id": 10,
+      "quantity": 2,
+      "amount": 20.0,
+      "coupon_code": null,
+      "status": "cancelled",
+      "created_at": "2026-10-12T03:53:37.973491"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {
+    "user": {
+      "id": 15,
+      "username": "agent_f9c87ac43705",
+      "balance": 980.0
+    },
+    "product": {
+      "id": 10,
+      "name": "agent-product-79d2770c",
+      "price": 10.0,
+      "stock": 3,
+      "status": "on_sale"
+    },
+    "order": {
+      "id": 5,
+      "user_id": 15,
+      "product_id": 10,
+      "quantity": 2,
+      "amount": 20.0,
+      "status": "created"
+    },
+    "initial": {
+      "user": {
+        "id": 15,
+        "username": "agent_f9c87ac43705",
+        "balance": 1000.0
+      },
+      "product": {
+        "id": 10,
+        "name": "agent-product-79d2770c",
+        "price": 10.0,
+        "stock": 5,
+        "status": "on_sale"
+      }
+    }
+  },
+  "database_after": {
+    "user": {
+      "id": 15,
+      "username": "agent_f9c87ac43705",
+      "balance": 1000.0
+    },
+    "product": {
+      "id": 10,
+      "name": "agent-product-79d2770c",
+      "price": 10.0,
+      "stock": 5,
+      "status": "on_sale"
+    },
+    "order": {
+      "id": 5,
+      "user_id": 15,
+      "product_id": 10,
+      "quantity": 2,
+      "amount": 20.0,
+      "status": "cancelled"
+    }
+  },
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        200
+      ],
+      "actual": 200,
+      "detail": ""
+    },
+    {
+      "name": "response_schema",
+      "status": "passed",
+      "expected": "OpenAPI schema",
+      "actual": "valid",
+      "detail": ""
+    },
+    {
+      "name": "order_status_cancelled",
+      "status": "passed",
+      "expected": "cancelled",
+      "actual": "cancelled",
+      "detail": ""
+    },
+    {
+      "name": "inventory_restored",
+      "status": "passed",
+      "expected": 5,
+      "actual": 5,
+      "detail": ""
+    },
+    {
+      "name": "balance_restored",
+      "status": "passed",
+      "expected": 1000.0,
+      "actual": 1000.0,
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:38Z",
+  "duration_ms": 173
+}

@@ -1,0 +1,88 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "orders.create.insufficient_stock.no_side_effect",
+  "operation_id": "create_order_api_orders_post",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-8ef5b7c9",
+  "request": {
+    "method": "POST",
+    "path": "/api/orders",
+    "json": {
+      "product_id": 20,
+      "quantity": 2
+    },
+    "params": null
+  },
+  "response": {
+    "status_code": 400,
+    "json": {
+      "detail": "Insufficient stock"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {
+    "user": {
+      "id": 32,
+      "username": "agent_7282b3551712",
+      "balance": 1000.0
+    },
+    "product": {
+      "id": 20,
+      "name": "agent-product-9306dc6a",
+      "price": 10.0,
+      "stock": 1,
+      "status": "on_sale"
+    },
+    "order_count": 9
+  },
+  "database_after": {
+    "user": {
+      "id": 32,
+      "username": "agent_7282b3551712",
+      "balance": 1000.0
+    },
+    "product": {
+      "id": 20,
+      "name": "agent-product-9306dc6a",
+      "price": 10.0,
+      "stock": 1,
+      "status": "on_sale"
+    },
+    "order_count": 9
+  },
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        400
+      ],
+      "actual": 400,
+      "detail": ""
+    },
+    {
+      "name": "inventory_unchanged",
+      "status": "passed",
+      "expected": 1,
+      "actual": 1,
+      "detail": ""
+    },
+    {
+      "name": "balance_unchanged",
+      "status": "passed",
+      "expected": 1000.0,
+      "actual": 1000.0,
+      "detail": ""
+    },
+    {
+      "name": "order_not_created",
+      "status": "passed",
+      "expected": 9,
+      "actual": 9,
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:40Z",
+  "duration_ms": 140
+}

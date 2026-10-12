@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "products.get.not_found",
+  "operation_id": "get_product_api_products__product_id__get",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-4d599e6e",
+  "request": {
+    "method": "GET",
+    "path": "/api/products/999999",
+    "json": null,
+    "params": null
+  },
+  "response": {
+    "status_code": 404,
+    "json": {
+      "detail": "Product not found"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {},
+  "database_after": {},
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        404
+      ],
+      "actual": 404,
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:39Z",
+  "duration_ms": 5
+}

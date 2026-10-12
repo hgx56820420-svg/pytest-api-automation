@@ -1,0 +1,92 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "operation.update_cart_item_api_cart_items__product_id__put",
+  "operation_id": "update_cart_item_api_cart_items__product_id__put",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-6f4973a3",
+  "request": {
+    "method": "PUT",
+    "path": "/api/cart/items/5",
+    "json": {
+      "product_id": 5,
+      "quantity": 3
+    },
+    "params": null
+  },
+  "response": {
+    "status_code": 200,
+    "json": {
+      "items": [
+        {
+          "id": 3,
+          "product_id": 5,
+          "quantity": 3,
+          "product": {
+            "id": 5,
+            "name": "agent-product-294ba97c",
+            "price": 10.0,
+            "stock": 10,
+            "status": "on_sale",
+            "created_at": "2026-10-12T03:53:36.751463"
+          }
+        }
+      ]
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {
+    "cart_items": [
+      {
+        "id": 3,
+        "user_id": 8,
+        "product_id": 5,
+        "quantity": 1
+      }
+    ]
+  },
+  "database_after": {
+    "cart_items": [
+      {
+        "id": 3,
+        "user_id": 8,
+        "product_id": 5,
+        "quantity": 3
+      }
+    ]
+  },
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        200
+      ],
+      "actual": 200,
+      "detail": ""
+    },
+    {
+      "name": "response_schema",
+      "status": "passed",
+      "expected": "OpenAPI schema",
+      "actual": "valid",
+      "detail": ""
+    },
+    {
+      "name": "cart_quantity_updated",
+      "status": "passed",
+      "expected": 3,
+      "actual": [
+        {
+          "id": 3,
+          "user_id": 8,
+          "product_id": 5,
+          "quantity": 3
+        }
+      ],
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:36Z",
+  "duration_ms": 199
+}

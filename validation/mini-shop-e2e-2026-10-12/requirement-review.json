@@ -1,0 +1,235 @@
+{
+  "schema_version": "1.0",
+  "source": "docs\\MINI_SHOP_API_REQUIREMENTS.md",
+  "source_hash": "sha256:35fc33c275fe1799d28d35970d49c7d89f836a55541c1093fcec28eaa2fa62a1",
+  "decision": "approved",
+  "entries": [
+    {
+      "requirement_id": "REQ-META-001",
+      "method": "GET",
+      "path": "/health",
+      "title": "",
+      "line": 158,
+      "operation_id": "health_health_get"
+    },
+    {
+      "requirement_id": "REQ-AUTH-001",
+      "method": "POST",
+      "path": "/api/auth/register",
+      "title": "",
+      "line": 180,
+      "operation_id": "register_api_auth_register_post"
+    },
+    {
+      "requirement_id": "REQ-AUTH-002",
+      "method": "POST",
+      "path": "/api/auth/login",
+      "title": "",
+      "line": 226,
+      "operation_id": "login_api_auth_login_post"
+    },
+    {
+      "requirement_id": "REQ-AUTH-003",
+      "method": "GET",
+      "path": "/api/auth/me",
+      "title": "",
+      "line": 259,
+      "operation_id": "me_api_auth_me_get"
+    },
+    {
+      "requirement_id": "REQ-PRODUCT-001",
+      "method": "GET",
+      "path": "/api/products",
+      "title": "",
+      "line": 275,
+      "operation_id": "list_products_api_products_get"
+    },
+    {
+      "requirement_id": "REQ-PRODUCT-002",
+      "method": "GET",
+      "path": "/api/products/{product_id}",
+      "title": "",
+      "line": 312,
+      "operation_id": "get_product_api_products__product_id__get"
+    },
+    {
+      "requirement_id": "REQ-PRODUCT-003",
+      "method": "POST",
+      "path": "/api/products",
+      "title": "",
+      "line": 325,
+      "operation_id": "create_product_api_products_post"
+    },
+    {
+      "requirement_id": "REQ-PRODUCT-004",
+      "method": "PUT",
+      "path": "/api/products/{product_id}",
+      "title": "",
+      "line": 351,
+      "operation_id": "update_product_api_products__product_id__put"
+    },
+    {
+      "requirement_id": "REQ-PRODUCT-005",
+      "method": "DELETE",
+      "path": "/api/products/{product_id}",
+      "title": "",
+      "line": 378,
+      "operation_id": "offline_product_api_products__product_id__delete"
+    },
+    {
+      "requirement_id": "REQ-ORDER-001",
+      "method": "POST",
+      "path": "/api/orders",
+      "title": "",
+      "line": 396,
+      "operation_id": "create_order_api_orders_post"
+    },
+    {
+      "requirement_id": "REQ-ORDER-002",
+      "method": "GET",
+      "path": "/api/orders",
+      "title": "",
+      "line": 463,
+      "operation_id": "list_my_orders_api_orders_get"
+    },
+    {
+      "requirement_id": "REQ-ORDER-003",
+      "method": "GET",
+      "path": "/api/orders/{order_id}",
+      "title": "",
+      "line": 481,
+      "operation_id": "get_order_api_orders__order_id__get"
+    },
+    {
+      "requirement_id": "REQ-ORDER-004",
+      "method": "POST",
+      "path": "/api/orders/{order_id}/pay",
+      "title": "",
+      "line": 494,
+      "operation_id": "pay_order_api_orders__order_id__pay_post"
+    },
+    {
+      "requirement_id": "REQ-ORDER-005",
+      "method": "POST",
+      "path": "/api/orders/{order_id}/cancel",
+      "title": "",
+      "line": 512,
+      "operation_id": "cancel_order_api_orders__order_id__cancel_post"
+    },
+    {
+      "requirement_id": "REQ-CART-001",
+      "method": "GET",
+      "path": "/api/cart",
+      "title": "查询当前用户购物车",
+      "line": 609,
+      "operation_id": "get_cart_api_cart_get"
+    },
+    {
+      "requirement_id": "REQ-CART-002",
+      "method": "DELETE",
+      "path": "/api/cart",
+      "title": "清空当前用户购物车",
+      "line": 611,
+      "operation_id": "clear_cart_api_cart_delete"
+    },
+    {
+      "requirement_id": "REQ-CART-003",
+      "method": "POST",
+      "path": "/api/cart/items",
+      "title": "添加购物车商品",
+      "line": 613,
+      "operation_id": "add_cart_item_api_cart_items_post"
+    },
+    {
+      "requirement_id": "REQ-CART-004",
+      "method": "PUT",
+      "path": "/api/cart/items/{product_id}",
+      "title": "修改购物车数量",
+      "line": 615,
+      "operation_id": "update_cart_item_api_cart_items__product_id__put"
+    },
+    {
+      "requirement_id": "REQ-CART-005",
+      "method": "DELETE",
+      "path": "/api/cart/items/{product_id}",
+      "title": "删除购物车商品",
+      "line": 617,
+      "operation_id": "remove_cart_item_api_cart_items__product_id__delete"
+    },
+    {
+      "requirement_id": "REQ-COUPON-001",
+      "method": "GET",
+      "path": "/api/coupons",
+      "title": "查询可用优惠券",
+      "line": 619,
+      "operation_id": "list_coupons_api_coupons_get"
+    },
+    {
+      "requirement_id": "REQ-COUPON-002",
+      "method": "POST",
+      "path": "/api/coupons",
+      "title": "创建优惠券",
+      "line": 621,
+      "operation_id": "create_coupon_api_coupons_post"
+    },
+    {
+      "requirement_id": "REQ-INVENTORY-001",
+      "method": "GET",
+      "path": "/api/inventory/{product_id}/transactions",
+      "title": "查询库存变更流水",
+      "line": 623,
+      "operation_id": "transactions_api_inventory__product_id__transactions_get"
+    }
+  ],
+  "operation_mapping": {
+    "health_health_get": "REQ-META-001",
+    "register_api_auth_register_post": "REQ-AUTH-001",
+    "login_api_auth_login_post": "REQ-AUTH-002",
+    "me_api_auth_me_get": "REQ-AUTH-003",
+    "list_products_api_products_get": "REQ-PRODUCT-001",
+    "get_product_api_products__product_id__get": "REQ-PRODUCT-002",
+    "create_product_api_products_post": "REQ-PRODUCT-003",
+    "update_product_api_products__product_id__put": "REQ-PRODUCT-004",
+    "offline_product_api_products__product_id__delete": "REQ-PRODUCT-005",
+    "create_order_api_orders_post": "REQ-ORDER-001",
+    "list_my_orders_api_orders_get": "REQ-ORDER-002",
+    "get_order_api_orders__order_id__get": "REQ-ORDER-003",
+    "pay_order_api_orders__order_id__pay_post": "REQ-ORDER-004",
+    "cancel_order_api_orders__order_id__cancel_post": "REQ-ORDER-005",
+    "get_cart_api_cart_get": "REQ-CART-001",
+    "clear_cart_api_cart_delete": "REQ-CART-002",
+    "add_cart_item_api_cart_items_post": "REQ-CART-003",
+    "update_cart_item_api_cart_items__product_id__put": "REQ-CART-004",
+    "remove_cart_item_api_cart_items__product_id__delete": "REQ-CART-005",
+    "list_coupons_api_coupons_get": "REQ-COUPON-001",
+    "create_coupon_api_coupons_post": "REQ-COUPON-002",
+    "transactions_api_inventory__product_id__transactions_get": "REQ-INVENTORY-001"
+  },
+  "detected_business_rules": [
+    "inventory_change",
+    "balance_change",
+    "cancel_restores_state",
+    "failure_has_no_side_effect",
+    "order_state_machine",
+    "cross_user_isolation",
+    "transaction_atomicity"
+  ],
+  "detected_scenarios": [
+    "duplicate_register",
+    "wrong_password",
+    "missing_token",
+    "create_product_missing_token",
+    "get_product_not_found",
+    "create_product_invalid_price",
+    "order_product_not_found",
+    "order_invalid_quantity",
+    "cancel_paid",
+    "cancel_cancelled",
+    "other_user_order",
+    "insufficient_stock",
+    "insufficient_balance",
+    "pay_twice"
+  ],
+  "issues": [],
+  "warnings": []
+}

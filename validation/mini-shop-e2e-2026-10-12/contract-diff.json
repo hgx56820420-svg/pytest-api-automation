@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0",
+  "baseline_hash": "sha256:68dd8ef77a5c282008b889ff133aa968a2e2641ea7435ff269721ec1b53364d4",
+  "runtime_hash": "sha256:68dd8ef77a5c282008b889ff133aa968a2e2641ea7435ff269721ec1b53364d4",
+  "status": "compatible",
+  "decision": "continue",
+  "changes": []
+}

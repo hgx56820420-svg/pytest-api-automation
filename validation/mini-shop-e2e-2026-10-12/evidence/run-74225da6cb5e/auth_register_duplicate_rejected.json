@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "auth.register.duplicate.rejected",
+  "operation_id": "register_api_auth_register_post",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-e6156184",
+  "request": {
+    "method": "POST",
+    "path": "/api/auth/register",
+    "json": {
+      "username": "agent_45d5aee2be4b",
+      "password": "[REDACTED]"
+    },
+    "params": null
+  },
+  "response": {
+    "status_code": 409,
+    "json": {
+      "detail": "Username already exists"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {},
+  "database_after": {},
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": 409,
+      "actual": 409,
+      "detail": ""
+    },
+    {
+      "name": "duplicate_not_created",
+      "status": "passed",
+      "expected": "201 then 409",
+      "actual": "201 then 409",
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:39Z",
+  "duration_ms": 80
+}

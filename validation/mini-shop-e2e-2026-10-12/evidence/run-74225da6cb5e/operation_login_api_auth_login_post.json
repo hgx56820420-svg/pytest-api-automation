@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "operation.login_api_auth_login_post",
+  "operation_id": "login_api_auth_login_post",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-936a1e9a",
+  "request": {
+    "method": "POST",
+    "path": "/api/auth/login",
+    "json": {
+      "username": "agent_d7269b471cb8",
+      "password": "[REDACTED]"
+    },
+    "params": null
+  },
+  "response": {
+    "status_code": 200,
+    "json": {
+      "access_token": "[REDACTED]",
+      "token_type": "bearer"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {},
+  "database_after": {},
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        200
+      ],
+      "actual": 200,
+      "detail": ""
+    },
+    {
+      "name": "response_schema",
+      "status": "passed",
+      "expected": "OpenAPI schema",
+      "actual": "valid",
+      "detail": ""
+    },
+    {
+      "name": "token_present",
+      "status": "passed",
+      "expected": true,
+      "actual": true,
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:35Z",
+  "duration_ms": 160
+}

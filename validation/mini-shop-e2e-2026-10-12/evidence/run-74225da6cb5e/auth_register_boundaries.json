@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "auth.register.boundaries",
+  "operation_id": "register_api_auth_register_post",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-14c4a61f",
+  "request": {
+    "method": "POST",
+    "path": "/api/auth/register",
+    "json": "boundary cases"
+  },
+  "response": {
+    "status_codes": [
+      422,
+      201,
+      201,
+      422
+    ]
+  },
+  "database_before": {},
+  "database_after": {},
+  "assertions": [
+    {
+      "name": "boundary_statuses",
+      "status": "passed",
+      "expected": [
+        422,
+        201,
+        201,
+        422
+      ],
+      "actual": [
+        422,
+        201,
+        201,
+        422
+      ],
+      "detail": ""
+    },
+    {
+      "name": "invalid_not_created",
+      "status": "passed",
+      "expected": 2,
+      "actual": 2,
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:39Z",
+  "duration_ms": 160
+}

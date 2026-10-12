@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "operation.pay_order_api_orders__order_id__pay_post",
+  "operation_id": "pay_order_api_orders__order_id__pay_post",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-9d77b7dc",
+  "request": {
+    "method": "POST",
+    "path": "/api/orders/6/pay",
+    "json": null,
+    "params": null
+  },
+  "response": {
+    "status_code": 200,
+    "json": {
+      "id": 6,
+      "user_id": 16,
+      "product_id": 11,
+      "quantity": 1,
+      "amount": 10.0,
+      "coupon_code": null,
+      "status": "paid",
+      "created_at": "2026-10-12T03:53:38.161006"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {
+    "order": {
+      "id": 6,
+      "user_id": 16,
+      "product_id": 11,
+      "quantity": 1,
+      "amount": 10.0,
+      "status": "created"
+    }
+  },
+  "database_after": {
+    "order": {
+      "id": 6,
+      "user_id": 16,
+      "product_id": 11,
+      "quantity": 1,
+      "amount": 10.0,
+      "status": "paid"
+    }
+  },
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        200
+      ],
+      "actual": 200,
+      "detail": ""
+    },
+    {
+      "name": "response_schema",
+      "status": "passed",
+      "expected": "OpenAPI schema",
+      "actual": "valid",
+      "detail": ""
+    },
+    {
+      "name": "order_status_paid",
+      "status": "passed",
+      "expected": "paid",
+      "actual": "paid",
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:38Z",
+  "duration_ms": 184
+}

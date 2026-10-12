@@ -1,0 +1,96 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "operation.get_cart_api_cart_get",
+  "operation_id": "get_cart_api_cart_get",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-942ccb54",
+  "request": {
+    "method": "GET",
+    "path": "/api/cart",
+    "json": null,
+    "params": null
+  },
+  "response": {
+    "status_code": 200,
+    "json": {
+      "items": [
+        {
+          "id": 1,
+          "product_id": 2,
+          "quantity": 2,
+          "product": {
+            "id": 2,
+            "name": "agent-product-241aec86",
+            "price": 10.0,
+            "stock": 10,
+            "status": "on_sale",
+            "created_at": "2026-10-12T03:53:36.210529"
+          }
+        }
+      ]
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {
+    "cart_items": [
+      {
+        "id": 1,
+        "user_id": 5,
+        "product_id": 2,
+        "quantity": 2
+      }
+    ]
+  },
+  "database_after": {
+    "cart_items": [
+      {
+        "id": 1,
+        "user_id": 5,
+        "product_id": 2,
+        "quantity": 2
+      }
+    ]
+  },
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        200
+      ],
+      "actual": 200,
+      "detail": ""
+    },
+    {
+      "name": "response_schema",
+      "status": "passed",
+      "expected": "OpenAPI schema",
+      "actual": "valid",
+      "detail": ""
+    },
+    {
+      "name": "cart_user_isolation",
+      "status": "passed",
+      "expected": 2,
+      "actual": [
+        {
+          "id": 1,
+          "product_id": 2,
+          "quantity": 2,
+          "product": {
+            "id": 2,
+            "name": "agent-product-241aec86",
+            "price": 10.0,
+            "stock": 10,
+            "status": "on_sale",
+            "created_at": "2026-10-12T03:53:36.210529"
+          }
+        }
+      ],
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:36Z",
+  "duration_ms": 159
+}

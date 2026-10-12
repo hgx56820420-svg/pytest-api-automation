@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "auth.me.missing_token.rejected",
+  "operation_id": "me_api_auth_me_get",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-eac1d620",
+  "request": {
+    "method": "GET",
+    "path": "/api/auth/me",
+    "json": null,
+    "params": null
+  },
+  "response": {
+    "status_code": 401,
+    "json": {
+      "detail": "Invalid or missing credentials"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {},
+  "database_after": {},
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        401
+      ],
+      "actual": 401,
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:39Z",
+  "duration_ms": 4
+}

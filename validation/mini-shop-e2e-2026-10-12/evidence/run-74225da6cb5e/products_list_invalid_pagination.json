@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "products.list.invalid_pagination",
+  "operation_id": "list_products_api_products_get",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-d9b66497",
+  "request": {
+    "method": "GET",
+    "path": "/api/products",
+    "params": "invalid boundaries"
+  },
+  "response": {
+    "status_codes": [
+      422,
+      422
+    ]
+  },
+  "database_before": {},
+  "database_after": {},
+  "assertions": [
+    {
+      "name": "pagination_boundaries",
+      "status": "passed",
+      "expected": [
+        422,
+        422
+      ],
+      "actual": [
+        422,
+        422
+      ],
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:39Z",
+  "duration_ms": 8
+}

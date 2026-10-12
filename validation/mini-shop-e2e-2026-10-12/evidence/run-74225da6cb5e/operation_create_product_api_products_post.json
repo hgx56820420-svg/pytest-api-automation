@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "operation.create_product_api_products_post",
+  "operation_id": "create_product_api_products_post",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-a657a75f",
+  "request": {
+    "method": "POST",
+    "path": "/api/products",
+    "json": {
+      "name": "agent-product-995b7229",
+      "price": 10.0,
+      "stock": 5
+    },
+    "params": null
+  },
+  "response": {
+    "status_code": 201,
+    "json": {
+      "id": 12,
+      "name": "agent-product-995b7229",
+      "price": 10.0,
+      "stock": 5,
+      "status": "on_sale",
+      "created_at": "2026-10-12T03:53:38.347658"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {},
+  "database_after": {
+    "product": {
+      "id": 12,
+      "name": "agent-product-995b7229",
+      "price": 10.0,
+      "stock": 5,
+      "status": "on_sale"
+    }
+  },
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        201
+      ],
+      "actual": 201,
+      "detail": ""
+    },
+    {
+      "name": "response_schema",
+      "status": "passed",
+      "expected": "OpenAPI schema",
+      "actual": "valid",
+      "detail": ""
+    },
+    {
+      "name": "product_created",
+      "status": "passed",
+      "expected": true,
+      "actual": true,
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:38Z",
+  "duration_ms": 139
+}

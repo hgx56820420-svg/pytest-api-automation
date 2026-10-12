@@ -1,0 +1,7 @@
+{
+  "requested_workers": 1,
+  "effective_workers": 1,
+  "adapter": "mini_shop",
+  "parallel_safe": false,
+  "reason": "serial execution requested"
+}

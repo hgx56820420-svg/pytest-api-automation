@@ -1,0 +1,107 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "orders.cancel.paid.rejected",
+  "operation_id": "cancel_order_api_orders__order_id__cancel_post",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-2a38fb21",
+  "request": {
+    "method": "POST",
+    "path": "/api/orders/7/cancel",
+    "json": null,
+    "params": null
+  },
+  "response": {
+    "status_code": 409,
+    "json": {
+      "detail": "Cannot cancel an order in status 'paid'"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {
+    "order": {
+      "id": 7,
+      "user_id": 28,
+      "product_id": 17,
+      "quantity": 1,
+      "amount": 10.0,
+      "status": "paid"
+    },
+    "product": {
+      "id": 17,
+      "name": "agent-product-d520e8da",
+      "price": 10.0,
+      "stock": 4,
+      "status": "on_sale"
+    }
+  },
+  "database_after": {
+    "order": {
+      "id": 7,
+      "user_id": 28,
+      "product_id": 17,
+      "quantity": 1,
+      "amount": 10.0,
+      "status": "paid"
+    },
+    "product": {
+      "id": 17,
+      "name": "agent-product-d520e8da",
+      "price": 10.0,
+      "stock": 4,
+      "status": "on_sale"
+    }
+  },
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        409
+      ],
+      "actual": 409,
+      "detail": ""
+    },
+    {
+      "name": "state_unchanged",
+      "status": "passed",
+      "expected": {
+        "order": {
+          "id": 7,
+          "user_id": 28,
+          "product_id": 17,
+          "quantity": 1,
+          "amount": 10.0,
+          "status": "paid"
+        },
+        "product": {
+          "id": 17,
+          "name": "agent-product-d520e8da",
+          "price": 10.0,
+          "stock": 4,
+          "status": "on_sale"
+        }
+      },
+      "actual": {
+        "order": {
+          "id": 7,
+          "user_id": 28,
+          "product_id": 17,
+          "quantity": 1,
+          "amount": 10.0,
+          "status": "paid"
+        },
+        "product": {
+          "id": 17,
+          "name": "agent-product-d520e8da",
+          "price": 10.0,
+          "stock": 4,
+          "status": "on_sale"
+        }
+      },
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:39Z",
+  "duration_ms": 171
+}

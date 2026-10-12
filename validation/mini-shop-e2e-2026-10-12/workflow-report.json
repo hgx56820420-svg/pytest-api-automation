@@ -1,0 +1,105 @@
+{
+  "schema_version": "2.0",
+  "run_id": "run-74225da6cb5e",
+  "started_at": "2026-10-12T03:53:32.130910+00:00",
+  "finished_at": "2026-10-12T03:53:41.294209+00:00",
+  "status": "COMPLETED",
+  "decision": "PASS",
+  "max_repair_attempts": 2,
+  "steps": [
+    {
+      "step": "parse_requirement",
+      "attempt": 1,
+      "decision": "done",
+      "routed_to": "review_requirement",
+      "detail": "22 interfaces from requirements, 22 operations from OpenAPI"
+    },
+    {
+      "step": "review_requirement",
+      "attempt": 1,
+      "decision": "approved",
+      "routed_to": "design_cases",
+      "detail": ""
+    },
+    {
+      "step": "analyze_requirements",
+      "attempt": 1,
+      "decision": "skipped",
+      "routed_to": "design_cases",
+      "detail": "LLM analysis disabled (no --llm-analysis or missing .env config)"
+    },
+    {
+      "step": "case_designer",
+      "attempt": 1,
+      "decision": "done",
+      "routed_to": "review_coverage",
+      "detail": "38 cases"
+    },
+    {
+      "step": "review_coverage",
+      "attempt": 1,
+      "decision": "approved",
+      "routed_to": "generate_script",
+      "detail": ""
+    },
+    {
+      "step": "script_generator",
+      "attempt": 1,
+      "decision": "done",
+      "routed_to": "review_script",
+      "detail": ""
+    },
+    {
+      "step": "review_script",
+      "attempt": 1,
+      "decision": "approved",
+      "routed_to": "contract_gate",
+      "detail": ""
+    },
+    {
+      "step": "contract_gate",
+      "attempt": 1,
+      "decision": "compatible",
+      "routed_to": "execute",
+      "detail": ""
+    },
+    {
+      "step": "executor",
+      "attempt": 1,
+      "decision": "PASS",
+      "routed_to": "review_results",
+      "detail": "returncode=0, passed=38, failed=0, inconclusive=0"
+    },
+    {
+      "step": "result_reviewer",
+      "attempt": 1,
+      "decision": "approved",
+      "routed_to": "finalize",
+      "detail": ""
+    },
+    {
+      "step": "finalize",
+      "attempt": 1,
+      "decision": "PASS",
+      "routed_to": "END",
+      "detail": ""
+    }
+  ],
+  "artifacts": {
+    "parsed-requirement.json": "artifacts\\e2e-mini-shop\\parsed-requirement.json",
+    "normalized-requirement.json": "artifacts\\e2e-mini-shop\\normalized-requirement.json",
+    "requirement-review.json": "artifacts\\e2e-mini-shop\\requirement-review.json",
+    "workflow-input.json": "artifacts\\e2e-mini-shop\\workflow-input.json",
+    "test-cases.json": "artifacts\\e2e-mini-shop\\test-cases.json",
+    "coverage-report.json": "artifacts\\e2e-mini-shop\\coverage-report.json",
+    "script-review.json": "artifacts\\e2e-mini-shop\\script-review.json",
+    "contract-diff.json": "artifacts\\e2e-mini-shop\\contract-diff.json",
+    "llm-retry-history.json": "artifacts\\e2e-mini-shop\\llm-retry-history.json",
+    "execution-report.json": "artifacts\\e2e-mini-shop\\execution-report.json",
+    "result-review.json": "artifacts\\e2e-mini-shop\\result-review.json",
+    "workflow-checkpoints.sqlite3": "artifacts\\e2e-mini-shop\\workflow-checkpoints.sqlite3",
+    "workflow-cache.json": "artifacts\\e2e-mini-shop\\workflow-cache.json",
+    "execution-mode.json": "artifacts\\e2e-mini-shop\\execution-mode.json"
+  },
+  "issues": []
+}

@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "orders.get.other_user.hidden",
+  "operation_id": "get_order_api_orders__order_id__get",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-5a2a4ba1",
+  "request": {
+    "method": "GET",
+    "path": "/api/orders/9",
+    "json": null,
+    "params": null
+  },
+  "response": {
+    "status_code": 404,
+    "json": {
+      "detail": "Order not found"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {},
+  "database_after": {},
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        404
+      ],
+      "actual": 404,
+      "detail": ""
+    },
+    {
+      "name": "order_hidden",
+      "status": "passed",
+      "expected": 404,
+      "actual": 404,
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:40Z",
+  "duration_ms": 270
+}

@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "operation.offline_product_api_products__product_id__delete",
+  "operation_id": "offline_product_api_products__product_id__delete",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-67326c65",
+  "request": {
+    "method": "DELETE",
+    "path": "/api/products/13",
+    "json": null,
+    "params": null
+  },
+  "response": {
+    "status_code": 200,
+    "json": {
+      "id": 13,
+      "name": "agent-product-11cdea0e",
+      "price": 10.0,
+      "stock": 5,
+      "status": "off_sale",
+      "created_at": "2026-10-12T03:53:38.494448"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {
+    "product": {
+      "id": 13,
+      "name": "agent-product-11cdea0e",
+      "price": 10.0,
+      "stock": 5,
+      "status": "on_sale"
+    }
+  },
+  "database_after": {
+    "product": {
+      "id": 13,
+      "name": "agent-product-11cdea0e",
+      "price": 10.0,
+      "stock": 5,
+      "status": "off_sale"
+    }
+  },
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        200
+      ],
+      "actual": 200,
+      "detail": ""
+    },
+    {
+      "name": "response_schema",
+      "status": "passed",
+      "expected": "OpenAPI schema",
+      "actual": "valid",
+      "detail": ""
+    },
+    {
+      "name": "product_off_sale",
+      "status": "passed",
+      "expected": "off_sale",
+      "actual": "off_sale",
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:38Z",
+  "duration_ms": 156
+}

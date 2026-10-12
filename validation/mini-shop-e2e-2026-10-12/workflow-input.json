@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "openapi_source": "http://127.0.0.1:8010/openapi.json",
+  "requirements_md": "docs\\MINI_SHOP_API_REQUIREMENTS.md",
+  "requirements_hash": "sha256:35fc33c275fe1799d28d35970d49c7d89f836a55541c1093fcec28eaa2fa62a1",
+  "base_url": "http://127.0.0.1:8010",
+  "runtime_openapi": "http://127.0.0.1:8010/openapi.json",
+  "database_url_hash": "sha256:c2fde31ce00998858ddaef19d229f5a88863079246c22622bc13ab1dd76838d4",
+  "max_repair_attempts": 2,
+  "adapter": "mini_shop",
+  "fixed_accounts": false,
+  "llm_analysis": false,
+  "parallel_workers": 1
+}

@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "products.create.missing_token.rejected",
+  "operation_id": "create_product_api_products_post",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-b97a70be",
+  "request": {
+    "method": "POST",
+    "path": "/api/products",
+    "json": {
+      "name": "agent-product-ed5669b3",
+      "price": 10.0,
+      "stock": 5
+    },
+    "params": null
+  },
+  "response": {
+    "status_code": 401,
+    "json": {
+      "detail": "Invalid or missing credentials"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {
+    "count": 15
+  },
+  "database_after": {
+    "count": 15
+  },
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        401
+      ],
+      "actual": 401,
+      "detail": ""
+    },
+    {
+      "name": "product_not_created",
+      "status": "passed",
+      "expected": 15,
+      "actual": 15,
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:39Z",
+  "duration_ms": 5
+}

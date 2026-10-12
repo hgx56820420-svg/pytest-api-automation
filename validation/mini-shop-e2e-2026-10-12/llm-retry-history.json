@@ -1,0 +1,14 @@
+{
+  "run_id": "run-74225da6cb5e",
+  "status": "skipped",
+  "invocations": [
+    {
+      "invocation": 1,
+      "status": "skipped",
+      "attempts": [],
+      "reason": "LLM analysis disabled or configuration incomplete"
+    }
+  ],
+  "attempts": [],
+  "reason": "LLM analysis disabled or configuration incomplete"
+}

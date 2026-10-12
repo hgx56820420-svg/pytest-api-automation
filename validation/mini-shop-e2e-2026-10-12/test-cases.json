@@ -1,0 +1,837 @@
+{
+  "schema_version": "1.0",
+  "requirement_hash": "sha256:68dd8ef77a5c282008b889ff133aa968a2e2641ea7435ff269721ec1b53364d4",
+  "cases": [
+    {
+      "case_id": "operation.login_api_auth_login_post",
+      "operation_id": "login_api_auth_login_post",
+      "title": "Login",
+      "category": "security",
+      "scenario": "login",
+      "source_refs": [
+        "#/paths/~1api~1auth~1login/post",
+        "requirement:REQ-AUTH-002"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "token_present"
+      ],
+      "evidence_requirements": [
+        "http"
+      ]
+    },
+    {
+      "case_id": "operation.me_api_auth_me_get",
+      "operation_id": "me_api_auth_me_get",
+      "title": "Me",
+      "category": "security",
+      "scenario": "current_user",
+      "source_refs": [
+        "#/paths/~1api~1auth~1me/get",
+        "requirement:REQ-AUTH-003"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "authenticated_user"
+      ],
+      "evidence_requirements": [
+        "http"
+      ]
+    },
+    {
+      "case_id": "operation.register_api_auth_register_post",
+      "operation_id": "register_api_auth_register_post",
+      "title": "Register",
+      "category": "contract",
+      "scenario": "register",
+      "source_refs": [
+        "#/paths/~1api~1auth~1register/post",
+        "requirement:REQ-AUTH-001"
+      ],
+      "expected_status_codes": [
+        201
+      ],
+      "required_assertions": [
+        "http_status",
+        "response_schema"
+      ],
+      "evidence_requirements": [
+        "http"
+      ]
+    },
+    {
+      "case_id": "operation.clear_cart_api_cart_delete",
+      "operation_id": "clear_cart_api_cart_delete",
+      "title": "Clear Cart",
+      "category": "business",
+      "scenario": "clear_cart",
+      "source_refs": [
+        "#/paths/~1api~1cart/delete",
+        "requirement:REQ-CART-002"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "cart_cleared"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "operation.get_cart_api_cart_get",
+      "operation_id": "get_cart_api_cart_get",
+      "title": "Get Cart",
+      "category": "business",
+      "scenario": "get_cart",
+      "source_refs": [
+        "#/paths/~1api~1cart/get",
+        "requirement:REQ-CART-001"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "cart_user_isolation"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "operation.add_cart_item_api_cart_items_post",
+      "operation_id": "add_cart_item_api_cart_items_post",
+      "title": "Add Cart Item",
+      "category": "business",
+      "scenario": "add_cart_item",
+      "source_refs": [
+        "#/paths/~1api~1cart~1items/post",
+        "requirement:REQ-CART-003"
+      ],
+      "expected_status_codes": [
+        201
+      ],
+      "required_assertions": [
+        "http_status",
+        "cart_item_added",
+        "stock_limit"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "operation.remove_cart_item_api_cart_items__product_id__delete",
+      "operation_id": "remove_cart_item_api_cart_items__product_id__delete",
+      "title": "Remove Cart Item",
+      "category": "business",
+      "scenario": "remove_cart_item",
+      "source_refs": [
+        "#/paths/~1api~1cart~1items~1{product_id}/delete",
+        "requirement:REQ-CART-005"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "cart_item_removed"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "operation.update_cart_item_api_cart_items__product_id__put",
+      "operation_id": "update_cart_item_api_cart_items__product_id__put",
+      "title": "Update Cart Item",
+      "category": "business",
+      "scenario": "update_cart_item",
+      "source_refs": [
+        "#/paths/~1api~1cart~1items~1{product_id}/put",
+        "requirement:REQ-CART-004"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "cart_quantity_updated"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "operation.list_coupons_api_coupons_get",
+      "operation_id": "list_coupons_api_coupons_get",
+      "title": "List Coupons",
+      "category": "contract",
+      "scenario": "list_coupons",
+      "source_refs": [
+        "#/paths/~1api~1coupons/get",
+        "requirement:REQ-COUPON-001"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "response_schema"
+      ],
+      "evidence_requirements": [
+        "http"
+      ]
+    },
+    {
+      "case_id": "operation.create_coupon_api_coupons_post",
+      "operation_id": "create_coupon_api_coupons_post",
+      "title": "Create Coupon",
+      "category": "business",
+      "scenario": "create_coupon",
+      "source_refs": [
+        "#/paths/~1api~1coupons/post",
+        "requirement:REQ-COUPON-002"
+      ],
+      "expected_status_codes": [
+        201
+      ],
+      "required_assertions": [
+        "http_status",
+        "coupon_created"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "operation.transactions_api_inventory__product_id__transactions_get",
+      "operation_id": "transactions_api_inventory__product_id__transactions_get",
+      "title": "Transactions",
+      "category": "business",
+      "scenario": "inventory_transactions",
+      "source_refs": [
+        "#/paths/~1api~1inventory~1{product_id}~1transactions/get",
+        "requirement:REQ-INVENTORY-001"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "inventory_evidence"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "operation.list_my_orders_api_orders_get",
+      "operation_id": "list_my_orders_api_orders_get",
+      "title": "List My Orders",
+      "category": "contract",
+      "scenario": "list_orders",
+      "source_refs": [
+        "#/paths/~1api~1orders/get",
+        "requirement:REQ-ORDER-002"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "order_in_list"
+      ],
+      "evidence_requirements": [
+        "http"
+      ]
+    },
+    {
+      "case_id": "operation.create_order_api_orders_post",
+      "operation_id": "create_order_api_orders_post",
+      "title": "Create Order",
+      "category": "business",
+      "scenario": "create_order",
+      "source_refs": [
+        "#/paths/~1api~1orders/post",
+        "requirement:REQ-ORDER-001"
+      ],
+      "expected_status_codes": [
+        201
+      ],
+      "required_assertions": [
+        "http_status",
+        "order_created",
+        "inventory_decreased",
+        "balance_decreased"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "operation.get_order_api_orders__order_id__get",
+      "operation_id": "get_order_api_orders__order_id__get",
+      "title": "Get Order",
+      "category": "contract",
+      "scenario": "get_order",
+      "source_refs": [
+        "#/paths/~1api~1orders~1{order_id}/get",
+        "requirement:REQ-ORDER-003"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "order_matches"
+      ],
+      "evidence_requirements": [
+        "http"
+      ]
+    },
+    {
+      "case_id": "operation.cancel_order_api_orders__order_id__cancel_post",
+      "operation_id": "cancel_order_api_orders__order_id__cancel_post",
+      "title": "Cancel Order",
+      "category": "business",
+      "scenario": "cancel_order",
+      "source_refs": [
+        "#/paths/~1api~1orders~1{order_id}~1cancel/post",
+        "requirement:REQ-ORDER-005"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "order_status_cancelled",
+        "inventory_restored",
+        "balance_restored"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "operation.pay_order_api_orders__order_id__pay_post",
+      "operation_id": "pay_order_api_orders__order_id__pay_post",
+      "title": "Pay Order",
+      "category": "business",
+      "scenario": "pay_order",
+      "source_refs": [
+        "#/paths/~1api~1orders~1{order_id}~1pay/post",
+        "requirement:REQ-ORDER-004"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "order_status_paid"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "operation.list_products_api_products_get",
+      "operation_id": "list_products_api_products_get",
+      "title": "List Products",
+      "category": "contract",
+      "scenario": "list_products",
+      "source_refs": [
+        "#/paths/~1api~1products/get",
+        "requirement:REQ-PRODUCT-001"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "response_schema"
+      ],
+      "evidence_requirements": [
+        "http"
+      ]
+    },
+    {
+      "case_id": "operation.create_product_api_products_post",
+      "operation_id": "create_product_api_products_post",
+      "title": "Create Product",
+      "category": "business",
+      "scenario": "create_product",
+      "source_refs": [
+        "#/paths/~1api~1products/post",
+        "requirement:REQ-PRODUCT-003"
+      ],
+      "expected_status_codes": [
+        201
+      ],
+      "required_assertions": [
+        "http_status",
+        "product_created"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "operation.offline_product_api_products__product_id__delete",
+      "operation_id": "offline_product_api_products__product_id__delete",
+      "title": "Offline Product",
+      "category": "business",
+      "scenario": "offline_product",
+      "source_refs": [
+        "#/paths/~1api~1products~1{product_id}/delete",
+        "requirement:REQ-PRODUCT-005"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "product_off_sale"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "operation.get_product_api_products__product_id__get",
+      "operation_id": "get_product_api_products__product_id__get",
+      "title": "Get Product",
+      "category": "contract",
+      "scenario": "get_product",
+      "source_refs": [
+        "#/paths/~1api~1products~1{product_id}/get",
+        "requirement:REQ-PRODUCT-002"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "response_schema"
+      ],
+      "evidence_requirements": [
+        "http"
+      ]
+    },
+    {
+      "case_id": "operation.update_product_api_products__product_id__put",
+      "operation_id": "update_product_api_products__product_id__put",
+      "title": "Update Product",
+      "category": "business",
+      "scenario": "update_product",
+      "source_refs": [
+        "#/paths/~1api~1products~1{product_id}/put",
+        "requirement:REQ-PRODUCT-004"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "product_updated"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "operation.health_health_get",
+      "operation_id": "health_health_get",
+      "title": "Health",
+      "category": "contract",
+      "scenario": "health_check",
+      "source_refs": [
+        "#/paths/~1health/get",
+        "requirement:REQ-META-001"
+      ],
+      "expected_status_codes": [
+        200
+      ],
+      "required_assertions": [
+        "http_status",
+        "response_schema"
+      ],
+      "evidence_requirements": [
+        "http"
+      ]
+    },
+    {
+      "case_id": "auth.register.boundaries",
+      "operation_id": "register_api_auth_register_post",
+      "title": "注册用户名边界",
+      "category": "negative",
+      "scenario": "register_boundaries",
+      "source_refs": [
+        "knowledge:review-coverage-script-001",
+        "requirement:REQ-AUTH-001"
+      ],
+      "expected_status_codes": [
+        201,
+        422
+      ],
+      "required_assertions": [
+        "boundary_statuses",
+        "invalid_not_created"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "auth.register.duplicate.rejected",
+      "operation_id": "register_api_auth_register_post",
+      "title": "重复用户名被拒绝",
+      "category": "negative",
+      "scenario": "duplicate_register",
+      "source_refs": [
+        "knowledge:review-coverage-script-001",
+        "requirement:REQ-AUTH-001"
+      ],
+      "expected_status_codes": [
+        409
+      ],
+      "required_assertions": [
+        "http_status",
+        "duplicate_not_created"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "auth.login.wrong_password.rejected",
+      "operation_id": "login_api_auth_login_post",
+      "title": "错误密码登录被拒绝",
+      "category": "negative",
+      "scenario": "wrong_password",
+      "source_refs": [
+        "knowledge:review-coverage-script-001",
+        "requirement:REQ-AUTH-002"
+      ],
+      "expected_status_codes": [
+        401
+      ],
+      "required_assertions": [
+        "http_status",
+        "error_detail"
+      ],
+      "evidence_requirements": [
+        "http"
+      ]
+    },
+    {
+      "case_id": "auth.me.missing_token.rejected",
+      "operation_id": "me_api_auth_me_get",
+      "title": "未携带 Token 访问用户信息",
+      "category": "negative",
+      "scenario": "missing_token",
+      "source_refs": [
+        "knowledge:review-coverage-script-001",
+        "requirement:REQ-AUTH-003"
+      ],
+      "expected_status_codes": [
+        401
+      ],
+      "required_assertions": [
+        "http_status",
+        "error_detail"
+      ],
+      "evidence_requirements": [
+        "http"
+      ]
+    },
+    {
+      "case_id": "products.create.missing_token.rejected",
+      "operation_id": "create_product_api_products_post",
+      "title": "未认证不能创建商品",
+      "category": "negative",
+      "scenario": "create_product_missing_token",
+      "source_refs": [
+        "knowledge:review-coverage-script-001",
+        "requirement:REQ-PRODUCT-003"
+      ],
+      "expected_status_codes": [
+        401
+      ],
+      "required_assertions": [
+        "http_status",
+        "product_not_created"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "products.get.not_found",
+      "operation_id": "get_product_api_products__product_id__get",
+      "title": "查询不存在商品",
+      "category": "negative",
+      "scenario": "get_product_not_found",
+      "source_refs": [
+        "knowledge:review-coverage-script-001",
+        "requirement:REQ-PRODUCT-002"
+      ],
+      "expected_status_codes": [
+        404
+      ],
+      "required_assertions": [
+        "http_status",
+        "error_detail"
+      ],
+      "evidence_requirements": [
+        "http"
+      ]
+    },
+    {
+      "case_id": "products.create.invalid_price",
+      "operation_id": "create_product_api_products_post",
+      "title": "商品价格非法",
+      "category": "negative",
+      "scenario": "create_product_invalid_price",
+      "source_refs": [
+        "knowledge:review-coverage-script-001",
+        "requirement:REQ-PRODUCT-003"
+      ],
+      "expected_status_codes": [
+        422
+      ],
+      "required_assertions": [
+        "http_status",
+        "product_not_created"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "products.list.invalid_pagination",
+      "operation_id": "list_products_api_products_get",
+      "title": "商品分页参数非法",
+      "category": "negative",
+      "scenario": "list_products_invalid_pagination",
+      "source_refs": [
+        "knowledge:review-coverage-script-001",
+        "requirement:REQ-PRODUCT-001"
+      ],
+      "expected_status_codes": [
+        422
+      ],
+      "required_assertions": [
+        "pagination_boundaries"
+      ],
+      "evidence_requirements": [
+        "http"
+      ]
+    },
+    {
+      "case_id": "orders.create.product_not_found",
+      "operation_id": "create_order_api_orders_post",
+      "title": "商品不存在时不能下单",
+      "category": "negative",
+      "scenario": "order_product_not_found",
+      "source_refs": [
+        "knowledge:business-order-invariants-001",
+        "requirement:REQ-ORDER-001"
+      ],
+      "expected_status_codes": [
+        404
+      ],
+      "required_assertions": [
+        "http_status",
+        "order_not_created"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "orders.create.invalid_quantity",
+      "operation_id": "create_order_api_orders_post",
+      "title": "订单数量非法",
+      "category": "negative",
+      "scenario": "order_invalid_quantity",
+      "source_refs": [
+        "knowledge:business-order-invariants-001",
+        "requirement:REQ-ORDER-001"
+      ],
+      "expected_status_codes": [
+        422
+      ],
+      "required_assertions": [
+        "http_status",
+        "order_not_created"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "orders.cancel.paid.rejected",
+      "operation_id": "cancel_order_api_orders__order_id__cancel_post",
+      "title": "已支付订单不能取消",
+      "category": "negative",
+      "scenario": "cancel_paid",
+      "source_refs": [
+        "knowledge:business-order-invariants-001",
+        "requirement:REQ-ORDER-005"
+      ],
+      "expected_status_codes": [
+        409
+      ],
+      "required_assertions": [
+        "http_status",
+        "state_unchanged"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "orders.cancel.cancelled.rejected",
+      "operation_id": "cancel_order_api_orders__order_id__cancel_post",
+      "title": "已取消订单不能重复取消",
+      "category": "negative",
+      "scenario": "cancel_cancelled",
+      "source_refs": [
+        "knowledge:business-order-invariants-001",
+        "requirement:REQ-ORDER-005"
+      ],
+      "expected_status_codes": [
+        409
+      ],
+      "required_assertions": [
+        "http_status",
+        "state_unchanged"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "orders.get.other_user.hidden",
+      "operation_id": "get_order_api_orders__order_id__get",
+      "title": "用户不能访问他人订单",
+      "category": "security",
+      "scenario": "other_user_order",
+      "source_refs": [
+        "knowledge:review-coverage-script-001",
+        "requirement:REQ-ORDER-003"
+      ],
+      "expected_status_codes": [
+        404
+      ],
+      "required_assertions": [
+        "http_status",
+        "order_hidden"
+      ],
+      "evidence_requirements": [
+        "http"
+      ]
+    },
+    {
+      "case_id": "orders.create.insufficient_stock.no_side_effect",
+      "operation_id": "create_order_api_orders_post",
+      "title": "库存不足时不得产生数据库副作用",
+      "category": "negative",
+      "scenario": "insufficient_stock",
+      "source_refs": [
+        "knowledge:business-order-invariants-001",
+        "requirement:REQ-ORDER-001"
+      ],
+      "expected_status_codes": [
+        400
+      ],
+      "required_assertions": [
+        "http_status",
+        "inventory_unchanged",
+        "balance_unchanged",
+        "order_not_created"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "orders.create.insufficient_balance.no_side_effect",
+      "operation_id": "create_order_api_orders_post",
+      "title": "余额不足时不得产生数据库副作用",
+      "category": "negative",
+      "scenario": "insufficient_balance",
+      "source_refs": [
+        "knowledge:business-order-invariants-001",
+        "requirement:REQ-ORDER-001"
+      ],
+      "expected_status_codes": [
+        400
+      ],
+      "required_assertions": [
+        "http_status",
+        "inventory_unchanged",
+        "balance_unchanged",
+        "order_not_created"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    },
+    {
+      "case_id": "orders.pay.twice.rejected",
+      "operation_id": "pay_order_api_orders__order_id__pay_post",
+      "title": "订单不能重复支付",
+      "category": "negative",
+      "scenario": "pay_twice",
+      "source_refs": [
+        "knowledge:business-order-invariants-001",
+        "requirement:REQ-ORDER-004"
+      ],
+      "expected_status_codes": [
+        409
+      ],
+      "required_assertions": [
+        "http_status",
+        "order_status_paid"
+      ],
+      "evidence_requirements": [
+        "http",
+        "database"
+      ]
+    }
+  ]
+}

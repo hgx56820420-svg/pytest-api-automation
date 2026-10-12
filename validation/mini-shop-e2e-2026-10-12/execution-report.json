@@ -1,0 +1,2696 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "created_at": "2026-10-12T03:53:41.276556+00:00",
+  "decision": "PASS",
+  "target_base_url": "http://127.0.0.1:8010",
+  "requirement_hash": "sha256:68dd8ef77a5c282008b889ff133aa968a2e2641ea7435ff269721ec1b53364d4",
+  "contract_status": "compatible",
+  "summary": {
+    "total": 38,
+    "passed": 38,
+    "failed": 0,
+    "inconclusive": 0
+  },
+  "cases": [
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.login_api_auth_login_post",
+      "operation_id": "login_api_auth_login_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-936a1e9a",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "json": {
+          "username": "agent_d7269b471cb8",
+          "password": "[REDACTED]"
+        },
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": {
+          "access_token": "[REDACTED]",
+          "token_type": "bearer"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {},
+      "database_after": {},
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "token_present",
+          "status": "passed",
+          "expected": true,
+          "actual": true,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:35Z",
+      "duration_ms": 160
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.me_api_auth_me_get",
+      "operation_id": "me_api_auth_me_get",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-6ceb3575",
+      "request": {
+        "method": "GET",
+        "path": "/api/auth/me",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": {
+          "id": 2,
+          "username": "agent_c6a9bc8d2d0b",
+          "balance": 1000.0,
+          "created_at": "2026-10-12T03:53:35.739968"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {},
+      "database_after": {},
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "authenticated_user",
+          "status": "passed",
+          "expected": 2,
+          "actual": 2,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:35Z",
+      "duration_ms": 131
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.register_api_auth_register_post",
+      "operation_id": "register_api_auth_register_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-033484fb",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/register",
+        "json": {
+          "username": "agent_75b399eaa2a1",
+          "password": "[REDACTED]"
+        },
+        "params": null
+      },
+      "response": {
+        "status_code": 201,
+        "json": {
+          "id": 3,
+          "username": "agent_75b399eaa2a1",
+          "balance": 1000.0,
+          "created_at": "2026-10-12T03:53:35.876914"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {},
+      "database_after": {},
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            201
+          ],
+          "actual": 201,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:35Z",
+      "duration_ms": 70
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.clear_cart_api_cart_delete",
+      "operation_id": "clear_cart_api_cart_delete",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-f6713faf",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/cart",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": {
+          "items": []
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "cart_items": [
+          {
+            "id": 1,
+            "user_id": 4,
+            "product_id": 1,
+            "quantity": 1
+          }
+        ]
+      },
+      "database_after": {
+        "cart_items": []
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "cart_cleared",
+          "status": "passed",
+          "expected": [],
+          "actual": [],
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:36Z",
+      "duration_ms": 182
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.get_cart_api_cart_get",
+      "operation_id": "get_cart_api_cart_get",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-942ccb54",
+      "request": {
+        "method": "GET",
+        "path": "/api/cart",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": {
+          "items": [
+            {
+              "id": 1,
+              "product_id": 2,
+              "quantity": 2,
+              "product": {
+                "id": 2,
+                "name": "agent-product-241aec86",
+                "price": 10.0,
+                "stock": 10,
+                "status": "on_sale",
+                "created_at": "2026-10-12T03:53:36.210529"
+              }
+            }
+          ]
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "cart_items": [
+          {
+            "id": 1,
+            "user_id": 5,
+            "product_id": 2,
+            "quantity": 2
+          }
+        ]
+      },
+      "database_after": {
+        "cart_items": [
+          {
+            "id": 1,
+            "user_id": 5,
+            "product_id": 2,
+            "quantity": 2
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "cart_user_isolation",
+          "status": "passed",
+          "expected": 2,
+          "actual": [
+            {
+              "id": 1,
+              "product_id": 2,
+              "quantity": 2,
+              "product": {
+                "id": 2,
+                "name": "agent-product-241aec86",
+                "price": 10.0,
+                "stock": 10,
+                "status": "on_sale",
+                "created_at": "2026-10-12T03:53:36.210529"
+              }
+            }
+          ],
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:36Z",
+      "duration_ms": 159
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.add_cart_item_api_cart_items_post",
+      "operation_id": "add_cart_item_api_cart_items_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-21cb1686",
+      "request": {
+        "method": "POST",
+        "path": "/api/cart/items",
+        "json": {
+          "product_id": 3,
+          "quantity": 2
+        },
+        "params": null
+      },
+      "response": {
+        "status_code": 201,
+        "json": {
+          "items": [
+            {
+              "id": 2,
+              "product_id": 3,
+              "quantity": 2,
+              "product": {
+                "id": 3,
+                "name": "agent-product-c3badbb4",
+                "price": 10.0,
+                "stock": 10,
+                "status": "on_sale",
+                "created_at": "2026-10-12T03:53:36.386976"
+              }
+            }
+          ]
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "cart_items": []
+      },
+      "database_after": {
+        "cart_items": [
+          {
+            "id": 2,
+            "user_id": 6,
+            "product_id": 3,
+            "quantity": 2
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            201
+          ],
+          "actual": 201,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "cart_item_added",
+          "status": "passed",
+          "expected": 2,
+          "actual": [
+            {
+              "id": 2,
+              "user_id": 6,
+              "product_id": 3,
+              "quantity": 2
+            }
+          ],
+          "detail": ""
+        },
+        {
+          "name": "stock_limit",
+          "status": "passed",
+          "expected": true,
+          "actual": true,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:36Z",
+      "duration_ms": 163
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.remove_cart_item_api_cart_items__product_id__delete",
+      "operation_id": "remove_cart_item_api_cart_items__product_id__delete",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-badd4dd0",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/cart/items/4",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": {
+          "items": []
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "cart_items": [
+          {
+            "id": 3,
+            "user_id": 7,
+            "product_id": 4,
+            "quantity": 1
+          }
+        ]
+      },
+      "database_after": {
+        "cart_items": []
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "cart_item_removed",
+          "status": "passed",
+          "expected": [],
+          "actual": [],
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:36Z",
+      "duration_ms": 170
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.update_cart_item_api_cart_items__product_id__put",
+      "operation_id": "update_cart_item_api_cart_items__product_id__put",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-6f4973a3",
+      "request": {
+        "method": "PUT",
+        "path": "/api/cart/items/5",
+        "json": {
+          "product_id": 5,
+          "quantity": 3
+        },
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": {
+          "items": [
+            {
+              "id": 3,
+              "product_id": 5,
+              "quantity": 3,
+              "product": {
+                "id": 5,
+                "name": "agent-product-294ba97c",
+                "price": 10.0,
+                "stock": 10,
+                "status": "on_sale",
+                "created_at": "2026-10-12T03:53:36.751463"
+              }
+            }
+          ]
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "cart_items": [
+          {
+            "id": 3,
+            "user_id": 8,
+            "product_id": 5,
+            "quantity": 1
+          }
+        ]
+      },
+      "database_after": {
+        "cart_items": [
+          {
+            "id": 3,
+            "user_id": 8,
+            "product_id": 5,
+            "quantity": 3
+          }
+        ]
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "cart_quantity_updated",
+          "status": "passed",
+          "expected": 3,
+          "actual": [
+            {
+              "id": 3,
+              "user_id": 8,
+              "product_id": 5,
+              "quantity": 3
+            }
+          ],
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:36Z",
+      "duration_ms": 199
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.list_coupons_api_coupons_get",
+      "operation_id": "list_coupons_api_coupons_get",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-7789fad8",
+      "request": {
+        "method": "GET",
+        "path": "/api/coupons",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": [
+          {
+            "id": 1,
+            "code": "SAVE_FD186A84",
+            "discount_percent": 10.0,
+            "max_uses": 2,
+            "used_count": 0,
+            "status": "active"
+          }
+        ],
+        "content_type": "application/json"
+      },
+      "database_before": {},
+      "database_after": {},
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:36Z",
+      "duration_ms": 147
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.create_coupon_api_coupons_post",
+      "operation_id": "create_coupon_api_coupons_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-ed9394ea",
+      "request": {
+        "method": "POST",
+        "path": "/api/coupons",
+        "json": {
+          "code": "SAVE_53E868B0",
+          "discount_percent": 10,
+          "max_uses": 2
+        },
+        "params": null
+      },
+      "response": {
+        "status_code": 201,
+        "json": {
+          "id": 2,
+          "code": "SAVE_53E868B0",
+          "discount_percent": 10.0,
+          "max_uses": 2,
+          "used_count": 0,
+          "status": "active"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "coupon": {}
+      },
+      "database_after": {
+        "coupon": {
+          "id": 2,
+          "code": "SAVE_53E868B0",
+          "discount_percent": 10.0,
+          "max_uses": 2,
+          "used_count": 0,
+          "status": "active"
+        }
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            201
+          ],
+          "actual": 201,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "coupon_created",
+          "status": "passed",
+          "expected": "SAVE_53E868B0",
+          "actual": {
+            "id": 2,
+            "code": "SAVE_53E868B0",
+            "discount_percent": 10.0,
+            "max_uses": 2,
+            "used_count": 0,
+            "status": "active"
+          },
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:37Z",
+      "duration_ms": 138
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.transactions_api_inventory__product_id__transactions_get",
+      "operation_id": "transactions_api_inventory__product_id__transactions_get",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-40162c98",
+      "request": {
+        "method": "GET",
+        "path": "/api/inventory/6/transactions",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": [
+          {
+            "id": 1,
+            "product_id": 6,
+            "quantity_change": -2,
+            "reason": "order_created",
+            "reference_id": null,
+            "created_at": "2026-10-12T03:53:37.239244"
+          },
+          {
+            "id": 2,
+            "product_id": 6,
+            "quantity_change": 2,
+            "reason": "order_cancelled",
+            "reference_id": 1,
+            "created_at": "2026-10-12T03:53:37.265081"
+          }
+        ],
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "inventory_transactions": [],
+        "product": {
+          "id": 6,
+          "name": "agent-product-940824db",
+          "price": 10.0,
+          "stock": 10,
+          "status": "on_sale"
+        }
+      },
+      "database_after": {
+        "inventory_transactions": [
+          {
+            "id": 1,
+            "product_id": 6,
+            "quantity_change": -2,
+            "reason": "order_created",
+            "reference_id": null
+          },
+          {
+            "id": 2,
+            "product_id": 6,
+            "quantity_change": 2,
+            "reason": "order_cancelled",
+            "reference_id": 1
+          }
+        ],
+        "product": {
+          "id": 6,
+          "name": "agent-product-940824db",
+          "price": 10.0,
+          "stock": 10,
+          "status": "on_sale"
+        }
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "inventory_evidence",
+          "status": "passed",
+          "expected": "-2 then +2",
+          "actual": [
+            {
+              "id": 1,
+              "product_id": 6,
+              "quantity_change": -2,
+              "reason": "order_created",
+              "reference_id": null
+            },
+            {
+              "id": 2,
+              "product_id": 6,
+              "quantity_change": 2,
+              "reason": "order_cancelled",
+              "reference_id": 1
+            }
+          ],
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:37Z",
+      "duration_ms": 187
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.list_my_orders_api_orders_get",
+      "operation_id": "list_my_orders_api_orders_get",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-18962793",
+      "request": {
+        "method": "GET",
+        "path": "/api/orders",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": {
+          "total": 1,
+          "page": 1,
+          "size": 10,
+          "items": [
+            {
+              "id": 2,
+              "user_id": 12,
+              "product_id": 7,
+              "quantity": 1,
+              "amount": 10.0,
+              "coupon_code": null,
+              "status": "created",
+              "created_at": "2026-10-12T03:53:37.446153"
+            }
+          ]
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {},
+      "database_after": {},
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "order_in_list",
+          "status": "passed",
+          "expected": 2,
+          "actual": [
+            2
+          ],
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:37Z",
+      "duration_ms": 179
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.create_order_api_orders_post",
+      "operation_id": "create_order_api_orders_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-b644b770",
+      "request": {
+        "method": "POST",
+        "path": "/api/orders",
+        "json": {
+          "product_id": 8,
+          "quantity": 2
+        },
+        "params": null
+      },
+      "response": {
+        "status_code": 201,
+        "json": {
+          "id": 3,
+          "user_id": 13,
+          "product_id": 8,
+          "quantity": 2,
+          "amount": 20.0,
+          "coupon_code": null,
+          "status": "created",
+          "created_at": "2026-10-12T03:53:37.617763"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "user": {
+          "id": 13,
+          "username": "agent_35bdaefe5010",
+          "balance": 1000.0
+        },
+        "product": {
+          "id": 8,
+          "name": "agent-product-07ce4b53",
+          "price": 10.0,
+          "stock": 5,
+          "status": "on_sale"
+        },
+        "order_count": 2
+      },
+      "database_after": {
+        "user": {
+          "id": 13,
+          "username": "agent_35bdaefe5010",
+          "balance": 980.0
+        },
+        "product": {
+          "id": 8,
+          "name": "agent-product-07ce4b53",
+          "price": 10.0,
+          "stock": 3,
+          "status": "on_sale"
+        },
+        "order": {
+          "id": 3,
+          "user_id": 13,
+          "product_id": 8,
+          "quantity": 2,
+          "amount": 20.0,
+          "status": "created"
+        },
+        "order_count": 3
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            201
+          ],
+          "actual": 201,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "order_created",
+          "status": "passed",
+          "expected": 3,
+          "actual": 3,
+          "detail": ""
+        },
+        {
+          "name": "inventory_decreased",
+          "status": "passed",
+          "expected": 3,
+          "actual": 3,
+          "detail": ""
+        },
+        {
+          "name": "balance_decreased",
+          "status": "passed",
+          "expected": 980.0,
+          "actual": 980.0,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:37Z",
+      "duration_ms": 162
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.get_order_api_orders__order_id__get",
+      "operation_id": "get_order_api_orders__order_id__get",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-2669f648",
+      "request": {
+        "method": "GET",
+        "path": "/api/orders/4",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": {
+          "id": 4,
+          "user_id": 14,
+          "product_id": 9,
+          "quantity": 1,
+          "amount": 10.0,
+          "coupon_code": null,
+          "status": "created",
+          "created_at": "2026-10-12T03:53:37.799020"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {},
+      "database_after": {},
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "order_matches",
+          "status": "passed",
+          "expected": 4,
+          "actual": 4,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:37Z",
+      "duration_ms": 177
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.cancel_order_api_orders__order_id__cancel_post",
+      "operation_id": "cancel_order_api_orders__order_id__cancel_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-ab90ee4f",
+      "request": {
+        "method": "POST",
+        "path": "/api/orders/5/cancel",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": {
+          "id": 5,
+          "user_id": 15,
+          "product_id": 10,
+          "quantity": 2,
+          "amount": 20.0,
+          "coupon_code": null,
+          "status": "cancelled",
+          "created_at": "2026-10-12T03:53:37.973491"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "user": {
+          "id": 15,
+          "username": "agent_f9c87ac43705",
+          "balance": 980.0
+        },
+        "product": {
+          "id": 10,
+          "name": "agent-product-79d2770c",
+          "price": 10.0,
+          "stock": 3,
+          "status": "on_sale"
+        },
+        "order": {
+          "id": 5,
+          "user_id": 15,
+          "product_id": 10,
+          "quantity": 2,
+          "amount": 20.0,
+          "status": "created"
+        },
+        "initial": {
+          "user": {
+            "id": 15,
+            "username": "agent_f9c87ac43705",
+            "balance": 1000.0
+          },
+          "product": {
+            "id": 10,
+            "name": "agent-product-79d2770c",
+            "price": 10.0,
+            "stock": 5,
+            "status": "on_sale"
+          }
+        }
+      },
+      "database_after": {
+        "user": {
+          "id": 15,
+          "username": "agent_f9c87ac43705",
+          "balance": 1000.0
+        },
+        "product": {
+          "id": 10,
+          "name": "agent-product-79d2770c",
+          "price": 10.0,
+          "stock": 5,
+          "status": "on_sale"
+        },
+        "order": {
+          "id": 5,
+          "user_id": 15,
+          "product_id": 10,
+          "quantity": 2,
+          "amount": 20.0,
+          "status": "cancelled"
+        }
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "order_status_cancelled",
+          "status": "passed",
+          "expected": "cancelled",
+          "actual": "cancelled",
+          "detail": ""
+        },
+        {
+          "name": "inventory_restored",
+          "status": "passed",
+          "expected": 5,
+          "actual": 5,
+          "detail": ""
+        },
+        {
+          "name": "balance_restored",
+          "status": "passed",
+          "expected": 1000.0,
+          "actual": 1000.0,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:38Z",
+      "duration_ms": 173
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.pay_order_api_orders__order_id__pay_post",
+      "operation_id": "pay_order_api_orders__order_id__pay_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-9d77b7dc",
+      "request": {
+        "method": "POST",
+        "path": "/api/orders/6/pay",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": {
+          "id": 6,
+          "user_id": 16,
+          "product_id": 11,
+          "quantity": 1,
+          "amount": 10.0,
+          "coupon_code": null,
+          "status": "paid",
+          "created_at": "2026-10-12T03:53:38.161006"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "order": {
+          "id": 6,
+          "user_id": 16,
+          "product_id": 11,
+          "quantity": 1,
+          "amount": 10.0,
+          "status": "created"
+        }
+      },
+      "database_after": {
+        "order": {
+          "id": 6,
+          "user_id": 16,
+          "product_id": 11,
+          "quantity": 1,
+          "amount": 10.0,
+          "status": "paid"
+        }
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "order_status_paid",
+          "status": "passed",
+          "expected": "paid",
+          "actual": "paid",
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:38Z",
+      "duration_ms": 184
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.list_products_api_products_get",
+      "operation_id": "list_products_api_products_get",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-a4cc816a",
+      "request": {
+        "method": "GET",
+        "path": "/api/products",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": {
+          "total": 11,
+          "page": 1,
+          "size": 10,
+          "items": [
+            {
+              "id": 1,
+              "name": "agent-product-2c8343a9",
+              "price": 10.0,
+              "stock": 10,
+              "status": "on_sale",
+              "created_at": "2026-10-12T03:53:36.028490"
+            },
+            {
+              "id": 2,
+              "name": "agent-product-241aec86",
+              "price": 10.0,
+              "stock": 10,
+              "status": "on_sale",
+              "created_at": "2026-10-12T03:53:36.210529"
+            },
+            {
+              "id": 3,
+              "name": "agent-product-c3badbb4",
+              "price": 10.0,
+              "stock": 10,
+              "status": "on_sale",
+              "created_at": "2026-10-12T03:53:36.386976"
+            },
+            {
+              "id": 4,
+              "name": "agent-product-f10650c4",
+              "price": 10.0,
+              "stock": 10,
+              "status": "on_sale",
+              "created_at": "2026-10-12T03:53:36.545946"
+            },
+            {
+              "id": 5,
+              "name": "agent-product-294ba97c",
+              "price": 10.0,
+              "stock": 10,
+              "status": "on_sale",
+              "created_at": "2026-10-12T03:53:36.751463"
+            },
+            {
+              "id": 6,
+              "name": "agent-product-940824db",
+              "price": 10.0,
+              "stock": 10,
+              "status": "on_sale",
+              "created_at": "2026-10-12T03:53:37.223421"
+            },
+            {
+              "id": 7,
+              "name": "agent-product-5c40e1b9",
+              "price": 10.0,
+              "stock": 4,
+              "status": "on_sale",
+              "created_at": "2026-10-12T03:53:37.429508"
+            },
+            {
+              "id": 8,
+              "name": "agent-product-07ce4b53",
+              "price": 10.0,
+              "stock": 3,
+              "status": "on_sale",
+              "created_at": "2026-10-12T03:53:37.602308"
+            },
+            {
+              "id": 9,
+              "name": "agent-product-af491712",
+              "price": 10.0,
+              "stock": 4,
+              "status": "on_sale",
+              "created_at": "2026-10-12T03:53:37.780164"
+            },
+            {
+              "id": 10,
+              "name": "agent-product-79d2770c",
+              "price": 10.0,
+              "stock": 5,
+              "status": "on_sale",
+              "created_at": "2026-10-12T03:53:37.958336"
+            }
+          ]
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {},
+      "database_after": {},
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:38Z",
+      "duration_ms": 14
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.create_product_api_products_post",
+      "operation_id": "create_product_api_products_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-a657a75f",
+      "request": {
+        "method": "POST",
+        "path": "/api/products",
+        "json": {
+          "name": "agent-product-995b7229",
+          "price": 10.0,
+          "stock": 5
+        },
+        "params": null
+      },
+      "response": {
+        "status_code": 201,
+        "json": {
+          "id": 12,
+          "name": "agent-product-995b7229",
+          "price": 10.0,
+          "stock": 5,
+          "status": "on_sale",
+          "created_at": "2026-10-12T03:53:38.347658"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {},
+      "database_after": {
+        "product": {
+          "id": 12,
+          "name": "agent-product-995b7229",
+          "price": 10.0,
+          "stock": 5,
+          "status": "on_sale"
+        }
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            201
+          ],
+          "actual": 201,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "product_created",
+          "status": "passed",
+          "expected": true,
+          "actual": true,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:38Z",
+      "duration_ms": 139
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.offline_product_api_products__product_id__delete",
+      "operation_id": "offline_product_api_products__product_id__delete",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-67326c65",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/products/13",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": {
+          "id": 13,
+          "name": "agent-product-11cdea0e",
+          "price": 10.0,
+          "stock": 5,
+          "status": "off_sale",
+          "created_at": "2026-10-12T03:53:38.494448"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "product": {
+          "id": 13,
+          "name": "agent-product-11cdea0e",
+          "price": 10.0,
+          "stock": 5,
+          "status": "on_sale"
+        }
+      },
+      "database_after": {
+        "product": {
+          "id": 13,
+          "name": "agent-product-11cdea0e",
+          "price": 10.0,
+          "stock": 5,
+          "status": "off_sale"
+        }
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "product_off_sale",
+          "status": "passed",
+          "expected": "off_sale",
+          "actual": "off_sale",
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:38Z",
+      "duration_ms": 156
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.get_product_api_products__product_id__get",
+      "operation_id": "get_product_api_products__product_id__get",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-bbe0cecc",
+      "request": {
+        "method": "GET",
+        "path": "/api/products/14",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": {
+          "id": 14,
+          "name": "agent-product-1d22b279",
+          "price": 10.0,
+          "stock": 5,
+          "status": "on_sale",
+          "created_at": "2026-10-12T03:53:38.653756"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {},
+      "database_after": {},
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:38Z",
+      "duration_ms": 142
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.update_product_api_products__product_id__put",
+      "operation_id": "update_product_api_products__product_id__put",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-9849ff63",
+      "request": {
+        "method": "PUT",
+        "path": "/api/products/15",
+        "json": {
+          "price": 12.5,
+          "stock": 7
+        },
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": {
+          "id": 15,
+          "name": "agent-product-fd44b38a",
+          "price": 12.5,
+          "stock": 7,
+          "status": "on_sale",
+          "created_at": "2026-10-12T03:53:38.808934"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "product": {
+          "id": 15,
+          "name": "agent-product-fd44b38a",
+          "price": 10.0,
+          "stock": 5,
+          "status": "on_sale"
+        }
+      },
+      "database_after": {
+        "product": {
+          "id": 15,
+          "name": "agent-product-fd44b38a",
+          "price": 12.5,
+          "stock": 7,
+          "status": "on_sale"
+        }
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "product_updated",
+          "status": "passed",
+          "expected": {
+            "price": 12.5,
+            "stock": 7
+          },
+          "actual": {
+            "id": 15,
+            "name": "agent-product-fd44b38a",
+            "price": 12.5,
+            "stock": 7,
+            "status": "on_sale"
+          },
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:38Z",
+      "duration_ms": 156
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "operation.health_health_get",
+      "operation_id": "health_health_get",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-b23d7c4e",
+      "request": {
+        "method": "GET",
+        "path": "/health",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 200,
+        "json": {
+          "status": "ok"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {},
+      "database_after": {},
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            200
+          ],
+          "actual": 200,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:38Z",
+      "duration_ms": 3
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "auth.register.boundaries",
+      "operation_id": "register_api_auth_register_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-14c4a61f",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/register",
+        "json": "boundary cases"
+      },
+      "response": {
+        "status_codes": [
+          422,
+          201,
+          201,
+          422
+        ]
+      },
+      "database_before": {},
+      "database_after": {},
+      "assertions": [
+        {
+          "name": "boundary_statuses",
+          "status": "passed",
+          "expected": [
+            422,
+            201,
+            201,
+            422
+          ],
+          "actual": [
+            422,
+            201,
+            201,
+            422
+          ],
+          "detail": ""
+        },
+        {
+          "name": "invalid_not_created",
+          "status": "passed",
+          "expected": 2,
+          "actual": 2,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:39Z",
+      "duration_ms": 160
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "auth.register.duplicate.rejected",
+      "operation_id": "register_api_auth_register_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-e6156184",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/register",
+        "json": {
+          "username": "agent_45d5aee2be4b",
+          "password": "[REDACTED]"
+        },
+        "params": null
+      },
+      "response": {
+        "status_code": 409,
+        "json": {
+          "detail": "Username already exists"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {},
+      "database_after": {},
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": 409,
+          "actual": 409,
+          "detail": ""
+        },
+        {
+          "name": "duplicate_not_created",
+          "status": "passed",
+          "expected": "201 then 409",
+          "actual": "201 then 409",
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:39Z",
+      "duration_ms": 80
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "auth.login.wrong_password.rejected",
+      "operation_id": "login_api_auth_login_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-0d1a2349",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/login",
+        "json": {
+          "username": "agent_cd91d90aa3c4",
+          "password": "[REDACTED]"
+        },
+        "params": null
+      },
+      "response": {
+        "status_code": 401,
+        "json": {
+          "detail": "Incorrect username or password"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {},
+      "database_after": {},
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            401
+          ],
+          "actual": 401,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:39Z",
+      "duration_ms": 213
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "auth.me.missing_token.rejected",
+      "operation_id": "me_api_auth_me_get",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-eac1d620",
+      "request": {
+        "method": "GET",
+        "path": "/api/auth/me",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 401,
+        "json": {
+          "detail": "Invalid or missing credentials"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {},
+      "database_after": {},
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            401
+          ],
+          "actual": 401,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:39Z",
+      "duration_ms": 4
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "products.create.missing_token.rejected",
+      "operation_id": "create_product_api_products_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-b97a70be",
+      "request": {
+        "method": "POST",
+        "path": "/api/products",
+        "json": {
+          "name": "agent-product-ed5669b3",
+          "price": 10.0,
+          "stock": 5
+        },
+        "params": null
+      },
+      "response": {
+        "status_code": 401,
+        "json": {
+          "detail": "Invalid or missing credentials"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "count": 15
+      },
+      "database_after": {
+        "count": 15
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            401
+          ],
+          "actual": 401,
+          "detail": ""
+        },
+        {
+          "name": "product_not_created",
+          "status": "passed",
+          "expected": 15,
+          "actual": 15,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:39Z",
+      "duration_ms": 5
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "products.get.not_found",
+      "operation_id": "get_product_api_products__product_id__get",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-4d599e6e",
+      "request": {
+        "method": "GET",
+        "path": "/api/products/999999",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 404,
+        "json": {
+          "detail": "Product not found"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {},
+      "database_after": {},
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            404
+          ],
+          "actual": 404,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:39Z",
+      "duration_ms": 5
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "products.create.invalid_price",
+      "operation_id": "create_product_api_products_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-b6674c71",
+      "request": {
+        "method": "POST",
+        "path": "/api/products",
+        "json": {
+          "name": "agent-product-dad77171",
+          "price": 0,
+          "stock": 5
+        },
+        "params": null
+      },
+      "response": {
+        "status_code": 422,
+        "json": {
+          "detail": [
+            {
+              "type": "greater_than",
+              "loc": [
+                "body",
+                "price"
+              ],
+              "msg": "Input should be greater than 0",
+              "input": 0,
+              "ctx": {
+                "gt": 0.0
+              }
+            }
+          ]
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "count": 15
+      },
+      "database_after": {
+        "count": 15
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            422
+          ],
+          "actual": 422,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "product_not_created",
+          "status": "passed",
+          "expected": 15,
+          "actual": 15,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:39Z",
+      "duration_ms": 129
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "products.list.invalid_pagination",
+      "operation_id": "list_products_api_products_get",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-d9b66497",
+      "request": {
+        "method": "GET",
+        "path": "/api/products",
+        "params": "invalid boundaries"
+      },
+      "response": {
+        "status_codes": [
+          422,
+          422
+        ]
+      },
+      "database_before": {},
+      "database_after": {},
+      "assertions": [
+        {
+          "name": "pagination_boundaries",
+          "status": "passed",
+          "expected": [
+            422,
+            422
+          ],
+          "actual": [
+            422,
+            422
+          ],
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:39Z",
+      "duration_ms": 8
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "orders.create.product_not_found",
+      "operation_id": "create_order_api_orders_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-ee84ce18",
+      "request": {
+        "method": "POST",
+        "path": "/api/orders",
+        "json": {
+          "product_id": 999999,
+          "quantity": 1
+        },
+        "params": null
+      },
+      "response": {
+        "status_code": 404,
+        "json": {
+          "detail": "Product not found"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "user": {
+          "id": 26,
+          "username": "agent_b04ad4966b24",
+          "balance": 1000.0
+        },
+        "order_count": 6
+      },
+      "database_after": {
+        "user": {
+          "id": 26,
+          "username": "agent_b04ad4966b24",
+          "balance": 1000.0
+        },
+        "order_count": 6
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            404
+          ],
+          "actual": 404,
+          "detail": ""
+        },
+        {
+          "name": "order_not_created",
+          "status": "passed",
+          "expected": 6,
+          "actual": 6,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:39Z",
+      "duration_ms": 142
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "orders.create.invalid_quantity",
+      "operation_id": "create_order_api_orders_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-5759cf02",
+      "request": {
+        "method": "POST",
+        "path": "/api/orders",
+        "json": {
+          "product_id": 16,
+          "quantity": 0
+        },
+        "params": null
+      },
+      "response": {
+        "status_code": 422,
+        "json": {
+          "detail": [
+            {
+              "type": "greater_than",
+              "loc": [
+                "body",
+                "quantity"
+              ],
+              "msg": "Input should be greater than 0",
+              "input": 0,
+              "ctx": {
+                "gt": 0
+              }
+            }
+          ]
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "user": {
+          "id": 27,
+          "username": "agent_1a7510e37a3c",
+          "balance": 1000.0
+        },
+        "product": {
+          "id": 16,
+          "name": "agent-product-510008cd",
+          "price": 10.0,
+          "stock": 5,
+          "status": "on_sale"
+        },
+        "order_count": 6
+      },
+      "database_after": {
+        "user": {
+          "id": 27,
+          "username": "agent_1a7510e37a3c",
+          "balance": 1000.0
+        },
+        "product": {
+          "id": 16,
+          "name": "agent-product-510008cd",
+          "price": 10.0,
+          "stock": 5,
+          "status": "on_sale"
+        },
+        "order_count": 6
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            422
+          ],
+          "actual": 422,
+          "detail": ""
+        },
+        {
+          "name": "response_schema",
+          "status": "passed",
+          "expected": "OpenAPI schema",
+          "actual": "valid",
+          "detail": ""
+        },
+        {
+          "name": "order_not_created",
+          "status": "passed",
+          "expected": 6,
+          "actual": 6,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:39Z",
+      "duration_ms": 146
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "orders.cancel.paid.rejected",
+      "operation_id": "cancel_order_api_orders__order_id__cancel_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-2a38fb21",
+      "request": {
+        "method": "POST",
+        "path": "/api/orders/7/cancel",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 409,
+        "json": {
+          "detail": "Cannot cancel an order in status 'paid'"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "order": {
+          "id": 7,
+          "user_id": 28,
+          "product_id": 17,
+          "quantity": 1,
+          "amount": 10.0,
+          "status": "paid"
+        },
+        "product": {
+          "id": 17,
+          "name": "agent-product-d520e8da",
+          "price": 10.0,
+          "stock": 4,
+          "status": "on_sale"
+        }
+      },
+      "database_after": {
+        "order": {
+          "id": 7,
+          "user_id": 28,
+          "product_id": 17,
+          "quantity": 1,
+          "amount": 10.0,
+          "status": "paid"
+        },
+        "product": {
+          "id": 17,
+          "name": "agent-product-d520e8da",
+          "price": 10.0,
+          "stock": 4,
+          "status": "on_sale"
+        }
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            409
+          ],
+          "actual": 409,
+          "detail": ""
+        },
+        {
+          "name": "state_unchanged",
+          "status": "passed",
+          "expected": {
+            "order": {
+              "id": 7,
+              "user_id": 28,
+              "product_id": 17,
+              "quantity": 1,
+              "amount": 10.0,
+              "status": "paid"
+            },
+            "product": {
+              "id": 17,
+              "name": "agent-product-d520e8da",
+              "price": 10.0,
+              "stock": 4,
+              "status": "on_sale"
+            }
+          },
+          "actual": {
+            "order": {
+              "id": 7,
+              "user_id": 28,
+              "product_id": 17,
+              "quantity": 1,
+              "amount": 10.0,
+              "status": "paid"
+            },
+            "product": {
+              "id": 17,
+              "name": "agent-product-d520e8da",
+              "price": 10.0,
+              "stock": 4,
+              "status": "on_sale"
+            }
+          },
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:39Z",
+      "duration_ms": 171
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "orders.cancel.cancelled.rejected",
+      "operation_id": "cancel_order_api_orders__order_id__cancel_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-4dd8030d",
+      "request": {
+        "method": "POST",
+        "path": "/api/orders/8/cancel",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 409,
+        "json": {
+          "detail": "Cannot cancel an order in status 'cancelled'"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "order": {
+          "id": 8,
+          "user_id": 29,
+          "product_id": 18,
+          "quantity": 1,
+          "amount": 10.0,
+          "status": "cancelled"
+        },
+        "product": {
+          "id": 18,
+          "name": "agent-product-64964d24",
+          "price": 10.0,
+          "stock": 5,
+          "status": "on_sale"
+        }
+      },
+      "database_after": {
+        "order": {
+          "id": 8,
+          "user_id": 29,
+          "product_id": 18,
+          "quantity": 1,
+          "amount": 10.0,
+          "status": "cancelled"
+        },
+        "product": {
+          "id": 18,
+          "name": "agent-product-64964d24",
+          "price": 10.0,
+          "stock": 5,
+          "status": "on_sale"
+        }
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            409
+          ],
+          "actual": 409,
+          "detail": ""
+        },
+        {
+          "name": "state_unchanged",
+          "status": "passed",
+          "expected": {
+            "order": {
+              "id": 8,
+              "user_id": 29,
+              "product_id": 18,
+              "quantity": 1,
+              "amount": 10.0,
+              "status": "cancelled"
+            },
+            "product": {
+              "id": 18,
+              "name": "agent-product-64964d24",
+              "price": 10.0,
+              "stock": 5,
+              "status": "on_sale"
+            }
+          },
+          "actual": {
+            "order": {
+              "id": 8,
+              "user_id": 29,
+              "product_id": 18,
+              "quantity": 1,
+              "amount": 10.0,
+              "status": "cancelled"
+            },
+            "product": {
+              "id": 18,
+              "name": "agent-product-64964d24",
+              "price": 10.0,
+              "stock": 5,
+              "status": "on_sale"
+            }
+          },
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:40Z",
+      "duration_ms": 178
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "orders.get.other_user.hidden",
+      "operation_id": "get_order_api_orders__order_id__get",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-5a2a4ba1",
+      "request": {
+        "method": "GET",
+        "path": "/api/orders/9",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 404,
+        "json": {
+          "detail": "Order not found"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {},
+      "database_after": {},
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            404
+          ],
+          "actual": 404,
+          "detail": ""
+        },
+        {
+          "name": "order_hidden",
+          "status": "passed",
+          "expected": 404,
+          "actual": 404,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:40Z",
+      "duration_ms": 270
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "orders.create.insufficient_stock.no_side_effect",
+      "operation_id": "create_order_api_orders_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-8ef5b7c9",
+      "request": {
+        "method": "POST",
+        "path": "/api/orders",
+        "json": {
+          "product_id": 20,
+          "quantity": 2
+        },
+        "params": null
+      },
+      "response": {
+        "status_code": 400,
+        "json": {
+          "detail": "Insufficient stock"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "user": {
+          "id": 32,
+          "username": "agent_7282b3551712",
+          "balance": 1000.0
+        },
+        "product": {
+          "id": 20,
+          "name": "agent-product-9306dc6a",
+          "price": 10.0,
+          "stock": 1,
+          "status": "on_sale"
+        },
+        "order_count": 9
+      },
+      "database_after": {
+        "user": {
+          "id": 32,
+          "username": "agent_7282b3551712",
+          "balance": 1000.0
+        },
+        "product": {
+          "id": 20,
+          "name": "agent-product-9306dc6a",
+          "price": 10.0,
+          "stock": 1,
+          "status": "on_sale"
+        },
+        "order_count": 9
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            400
+          ],
+          "actual": 400,
+          "detail": ""
+        },
+        {
+          "name": "inventory_unchanged",
+          "status": "passed",
+          "expected": 1,
+          "actual": 1,
+          "detail": ""
+        },
+        {
+          "name": "balance_unchanged",
+          "status": "passed",
+          "expected": 1000.0,
+          "actual": 1000.0,
+          "detail": ""
+        },
+        {
+          "name": "order_not_created",
+          "status": "passed",
+          "expected": 9,
+          "actual": 9,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:40Z",
+      "duration_ms": 140
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "orders.create.insufficient_balance.no_side_effect",
+      "operation_id": "create_order_api_orders_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-6e7fb72c",
+      "request": {
+        "method": "POST",
+        "path": "/api/orders",
+        "json": {
+          "product_id": 21,
+          "quantity": 1
+        },
+        "params": null
+      },
+      "response": {
+        "status_code": 400,
+        "json": {
+          "detail": "Insufficient balance"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "user": {
+          "id": 33,
+          "username": "agent_a962f7236468",
+          "balance": 1000.0
+        },
+        "product": {
+          "id": 21,
+          "name": "agent-product-62dead18",
+          "price": 2000.0,
+          "stock": 1,
+          "status": "on_sale"
+        },
+        "order_count": 9
+      },
+      "database_after": {
+        "user": {
+          "id": 33,
+          "username": "agent_a962f7236468",
+          "balance": 1000.0
+        },
+        "product": {
+          "id": 21,
+          "name": "agent-product-62dead18",
+          "price": 2000.0,
+          "stock": 1,
+          "status": "on_sale"
+        },
+        "order_count": 9
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            400
+          ],
+          "actual": 400,
+          "detail": ""
+        },
+        {
+          "name": "inventory_unchanged",
+          "status": "passed",
+          "expected": 1,
+          "actual": 1,
+          "detail": ""
+        },
+        {
+          "name": "balance_unchanged",
+          "status": "passed",
+          "expected": 1000.0,
+          "actual": 1000.0,
+          "detail": ""
+        },
+        {
+          "name": "order_not_created",
+          "status": "passed",
+          "expected": 9,
+          "actual": 9,
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:40Z",
+      "duration_ms": 153
+    },
+    {
+      "schema_version": "1.0",
+      "run_id": "run-74225da6cb5e",
+      "case_id": "orders.pay.twice.rejected",
+      "operation_id": "pay_order_api_orders__order_id__pay_post",
+      "status": "passed",
+      "request_id": "run-74225da6cb5e-8730b3fe",
+      "request": {
+        "method": "POST",
+        "path": "/api/orders/10/pay",
+        "json": null,
+        "params": null
+      },
+      "response": {
+        "status_code": 409,
+        "json": {
+          "detail": "Cannot pay an order in status 'paid'"
+        },
+        "content_type": "application/json"
+      },
+      "database_before": {
+        "order": {
+          "id": 10,
+          "user_id": 34,
+          "product_id": 22,
+          "quantity": 1,
+          "amount": 10.0,
+          "status": "paid"
+        }
+      },
+      "database_after": {
+        "order": {
+          "id": 10,
+          "user_id": 34,
+          "product_id": 22,
+          "quantity": 1,
+          "amount": 10.0,
+          "status": "paid"
+        }
+      },
+      "assertions": [
+        {
+          "name": "http_status",
+          "status": "passed",
+          "expected": [
+            409
+          ],
+          "actual": 409,
+          "detail": ""
+        },
+        {
+          "name": "order_status_paid",
+          "status": "passed",
+          "expected": "paid",
+          "actual": "paid",
+          "detail": ""
+        }
+      ],
+      "started_at": "2026-10-12T03:53:40Z",
+      "duration_ms": 160
+    }
+  ]
+}

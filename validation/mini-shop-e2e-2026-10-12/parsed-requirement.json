@@ -1,0 +1,277 @@
+{
+  "schema_version": "2.0",
+  "source": "docs\\MINI_SHOP_API_REQUIREMENTS.md",
+  "source_hash": "sha256:35fc33c275fe1799d28d35970d49c7d89f836a55541c1093fcec28eaa2fa62a1",
+  "title": "Mini Shop API 需求规格说明书",
+  "interfaces": [
+    {
+      "requirement_id": "REQ-META-001",
+      "method": "GET",
+      "path": "/health",
+      "title": "",
+      "line": 158,
+      "auth_required": false,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-AUTH-001",
+      "method": "POST",
+      "path": "/api/auth/register",
+      "title": "",
+      "line": 180,
+      "auth_required": false,
+      "expected_status_codes": [
+        201
+      ]
+    },
+    {
+      "requirement_id": "REQ-AUTH-002",
+      "method": "POST",
+      "path": "/api/auth/login",
+      "title": "",
+      "line": 226,
+      "auth_required": false,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-AUTH-003",
+      "method": "GET",
+      "path": "/api/auth/me",
+      "title": "",
+      "line": 259,
+      "auth_required": true,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-PRODUCT-001",
+      "method": "GET",
+      "path": "/api/products",
+      "title": "",
+      "line": 275,
+      "auth_required": false,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-PRODUCT-002",
+      "method": "GET",
+      "path": "/api/products/{product_id}",
+      "title": "",
+      "line": 312,
+      "auth_required": false,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-PRODUCT-003",
+      "method": "POST",
+      "path": "/api/products",
+      "title": "",
+      "line": 325,
+      "auth_required": true,
+      "expected_status_codes": [
+        201
+      ]
+    },
+    {
+      "requirement_id": "REQ-PRODUCT-004",
+      "method": "PUT",
+      "path": "/api/products/{product_id}",
+      "title": "",
+      "line": 351,
+      "auth_required": true,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-PRODUCT-005",
+      "method": "DELETE",
+      "path": "/api/products/{product_id}",
+      "title": "",
+      "line": 378,
+      "auth_required": true,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-ORDER-001",
+      "method": "POST",
+      "path": "/api/orders",
+      "title": "",
+      "line": 396,
+      "auth_required": true,
+      "expected_status_codes": [
+        201
+      ]
+    },
+    {
+      "requirement_id": "REQ-ORDER-002",
+      "method": "GET",
+      "path": "/api/orders",
+      "title": "",
+      "line": 463,
+      "auth_required": true,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-ORDER-003",
+      "method": "GET",
+      "path": "/api/orders/{order_id}",
+      "title": "",
+      "line": 481,
+      "auth_required": true,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-ORDER-004",
+      "method": "POST",
+      "path": "/api/orders/{order_id}/pay",
+      "title": "",
+      "line": 494,
+      "auth_required": true,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-ORDER-005",
+      "method": "POST",
+      "path": "/api/orders/{order_id}/cancel",
+      "title": "",
+      "line": 512,
+      "auth_required": true,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-CART-001",
+      "method": "GET",
+      "path": "/api/cart",
+      "title": "查询当前用户购物车",
+      "line": 609,
+      "auth_required": true,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-CART-002",
+      "method": "DELETE",
+      "path": "/api/cart",
+      "title": "清空当前用户购物车",
+      "line": 611,
+      "auth_required": true,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-CART-003",
+      "method": "POST",
+      "path": "/api/cart/items",
+      "title": "添加购物车商品",
+      "line": 613,
+      "auth_required": true,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-CART-004",
+      "method": "PUT",
+      "path": "/api/cart/items/{product_id}",
+      "title": "修改购物车数量",
+      "line": 615,
+      "auth_required": true,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-CART-005",
+      "method": "DELETE",
+      "path": "/api/cart/items/{product_id}",
+      "title": "删除购物车商品",
+      "line": 617,
+      "auth_required": true,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-COUPON-001",
+      "method": "GET",
+      "path": "/api/coupons",
+      "title": "查询可用优惠券",
+      "line": 619,
+      "auth_required": false,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-COUPON-002",
+      "method": "POST",
+      "path": "/api/coupons",
+      "title": "创建优惠券",
+      "line": 621,
+      "auth_required": false,
+      "expected_status_codes": [
+        200
+      ]
+    },
+    {
+      "requirement_id": "REQ-INVENTORY-001",
+      "method": "GET",
+      "path": "/api/inventory/{product_id}/transactions",
+      "title": "查询库存变更流水",
+      "line": 623,
+      "auth_required": false,
+      "expected_status_codes": [
+        200
+      ]
+    }
+  ],
+  "business_rules": [
+    "inventory_change",
+    "balance_change",
+    "cancel_restores_state",
+    "failure_has_no_side_effect",
+    "order_state_machine",
+    "cross_user_isolation",
+    "transaction_atomicity"
+  ],
+  "scenarios": [
+    "duplicate_register",
+    "wrong_password",
+    "missing_token",
+    "create_product_missing_token",
+    "get_product_not_found",
+    "create_product_invalid_price",
+    "order_product_not_found",
+    "order_invalid_quantity",
+    "cancel_paid",
+    "cancel_cancelled",
+    "other_user_order",
+    "insufficient_stock",
+    "insufficient_balance",
+    "pay_twice"
+  ],
+  "issues": [],
+  "warnings": []
+}

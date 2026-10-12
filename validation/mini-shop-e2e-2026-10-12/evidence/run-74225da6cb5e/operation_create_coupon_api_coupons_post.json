@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-74225da6cb5e",
+  "case_id": "operation.create_coupon_api_coupons_post",
+  "operation_id": "create_coupon_api_coupons_post",
+  "status": "passed",
+  "request_id": "run-74225da6cb5e-ed9394ea",
+  "request": {
+    "method": "POST",
+    "path": "/api/coupons",
+    "json": {
+      "code": "SAVE_53E868B0",
+      "discount_percent": 10,
+      "max_uses": 2
+    },
+    "params": null
+  },
+  "response": {
+    "status_code": 201,
+    "json": {
+      "id": 2,
+      "code": "SAVE_53E868B0",
+      "discount_percent": 10.0,
+      "max_uses": 2,
+      "used_count": 0,
+      "status": "active"
+    },
+    "content_type": "application/json"
+  },
+  "database_before": {
+    "coupon": {}
+  },
+  "database_after": {
+    "coupon": {
+      "id": 2,
+      "code": "SAVE_53E868B0",
+      "discount_percent": 10.0,
+      "max_uses": 2,
+      "used_count": 0,
+      "status": "active"
+    }
+  },
+  "assertions": [
+    {
+      "name": "http_status",
+      "status": "passed",
+      "expected": [
+        201
+      ],
+      "actual": 201,
+      "detail": ""
+    },
+    {
+      "name": "response_schema",
+      "status": "passed",
+      "expected": "OpenAPI schema",
+      "actual": "valid",
+      "detail": ""
+    },
+    {
+      "name": "coupon_created",
+      "status": "passed",
+      "expected": "SAVE_53E868B0",
+      "actual": {
+        "id": 2,
+        "code": "SAVE_53E868B0",
+        "discount_percent": 10.0,
+        "max_uses": 2,
+        "used_count": 0,
+        "status": "active"
+      },
+      "detail": ""
+    }
+  ],
+  "started_at": "2026-10-12T03:53:37Z",
+  "duration_ms": 138
+}
