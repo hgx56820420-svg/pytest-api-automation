@@ -26,7 +26,9 @@ Library 是一个用于验证测试框架通用性的最小图书借阅后端，
 - 借书、归还和我的借阅列表；
 - 服务存活检查。
 
-当前版本不包含逾期罚金、预约和管理员角色。
+当前版本不包含逾期罚金和预约。
+
+角色：注册接口只创建普通用户；管理员账号由服务启动时按 `LIB_ADMIN_USERNAME` / `LIB_ADMIN_PASSWORD` 创建。图书的创建、修改、下架只允许管理员，普通用户返回 `403`。Token 受众为 `library`，其他服务签发的 Token 返回 `401`。
 
 ## 3. 术语
 
@@ -167,7 +169,7 @@ stateDiagram-v2
 
 #### REQ-LIB-BOOK-002 `POST /api/books`
 
-创建图书。认证：需要。
+创建图书。认证：需要，且必须是管理员。
 
 请求体：
 
@@ -187,11 +189,11 @@ stateDiagram-v2
 
 #### REQ-LIB-BOOK-004 `PUT /api/books/{book_id}`
 
-更新图书信息。认证：需要。所有字段可选；`available_copies` 始终不超过更新后的 `total_copies`。
+更新图书信息。认证：需要，且必须是管理员。所有字段可选；`available_copies` 始终不超过更新后的 `total_copies`。
 
 #### REQ-LIB-BOOK-005 `DELETE /api/books/{book_id}`
 
-下架图书（软删除）：`status` 置为 `off_shelf`，记录保留。认证：需要。
+下架图书（软删除）：`status` 置为 `off_shelf`，记录保留。认证：需要，且必须是管理员。
 
 ### 7.4 借阅
 

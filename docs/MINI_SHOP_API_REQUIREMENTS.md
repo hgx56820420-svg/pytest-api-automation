@@ -27,7 +27,9 @@ Mini Shop 是一个用于 API 自动化测试验证的最小商城后端，提�
 - 订单相关库存和用户余额管理；
 - 服务存活检查。
 
-当前版本不包含真实支付渠道、配送、退款、管理员角色和多租户能力。
+当前版本不包含真实支付渠道、配送、退款和多租户能力。
+
+角色：注册接口只创建普通用户；管理员账号由服务启动时按 `APP_ADMIN_USERNAME` / `APP_ADMIN_PASSWORD` 创建。商品和优惠券的创建、修改、下架只允许管理员，普通用户调用返回 `403`，数据库不变。
 
 当前 V2 新增购物车、优惠券和库存流水：购物车按用户隔离；优惠券在订单中按百分比折扣并记录使用次数；库存流水记录下单扣减和取消恢复，供自动化 Agent 做数据库证据校验。
 
@@ -39,7 +41,7 @@ Mini Shop 是一个用于 API 自动化测试验证的最小商城后端，提�
 | 下架商品 | `status = off_sale`，记录保留但禁止下单 |
 | 已创建订单 | `status = created`，允许支付或取消 |
 | 已支付订单 | `status = paid`，终态 |
-| 已取消订单 | `status = cancelled`，终态，库存和余额已恢复 |
+| 已取消订单 | `status = cancelled`，终态，库存已恢复（未支付，无需退款） |
 | 软删除 | 不删除数据库记录，只改变资源状态 |
 | 当前用户 | Bearer Token 所代表的用户 |
 
@@ -326,7 +328,7 @@ stateDiagram-v2
 
 创建商品。
 
-认证：需要。当前 V1 不区分管理员和普通用户，任意已认证用户均可创建商品。
+认证：需要，且必须是管理员；普通用户返回 `403`。
 
 请求体：
 
@@ -352,7 +354,7 @@ stateDiagram-v2
 
 更新商品信息。
 
-认证：需要。当前 V1 不区分管理员和普通用户。
+认证：需要，且必须是管理员；普通用户返回 `403`。
 
 所有请求字段均为可选，只更新实际提交的字段：
 
@@ -379,7 +381,7 @@ stateDiagram-v2
 
 下架商品。
 
-认证：需要。当前 V1 不区分管理员和普通用户。
+认证：需要，且必须是管理员；普通用户返回 `403`。
 
 业务规则：
 
@@ -415,8 +417,9 @@ stateDiagram-v2
 
 1. 商品存在；
 2. 商品状态为 `on_sale`；
-3. 商品库存不少于购买数量；
-4. 当前用户余额不少于订单金额。
+3. 商品库存不少于购买数量。
+
+下单只占用库存，不扣余额；余额在支付时校验和扣减（见 REQ-ORDER-004）。
 
 订单金额计算：
 
@@ -444,7 +447,6 @@ amount = round(product.price * quantity, 2)
 |---:|---|---|
 | 400 | 商品已下架 | `Product is not on sale` |
 | 400 | 库存不足 | `Insufficient stock` |
-| 400 | 余额不足 | `Insufficient balance` |
 | 401 | 未认证 | `Invalid or missing credentials` |
 | 404 | 商品不存在 | `Product not found` |
 | 422 | 请求体不符合字段约束 | FastAPI 校验错误 |
@@ -453,12 +455,14 @@ amount = round(product.price * quantity, 2)
 
 ```text
 product.stock_after = product.stock_before - quantity
-user.balance_after = user.balance_before - amount
+user.balance_after = user.balance_before
 order_count_after = order_count_before + 1
 order.status = created
 ```
 
 失败不变量：任意前置条件失败时，库存、余额和订单总数均不得变化。
+
+并发要求：多个请求同时购买同一商品时，成功的订单总数量不得超过下单前库存，库存不得为负；库存不足的请求返回 `400 Insufficient stock`。
 
 #### REQ-ORDER-002 `GET /api/orders`
 
@@ -493,21 +497,31 @@ order.status = created
 
 #### REQ-ORDER-004 `POST /api/orders/{order_id}/pay`
 
-支付当前用户的已创建订单。
+支付当前用户的已创建订单，并按订单金额扣减余额。
 
-成功条件：订单当前状态必须为 `created`。
+成功条件：订单当前状态必须为 `created`，且当前用户余额不少于订单金额。
 
 成功响应 `200`，并将订单状态修改为 `paid`。
+
+成功副作用：
+
+```text
+user.balance_after = user.balance_before - order.amount
+product.stock_after = product.stock_before
+```
 
 错误响应：
 
 | 状态码 | 条件 |
 |---:|---|
+| 400 | 余额不足（`Insufficient balance`），订单保持 `created`，余额不变 |
 | 401 | 未认证 |
 | 404 | 订单不存在或不属于当前用户 |
 | 409 | 订单状态不是 `created` |
 
 验收条件：重复支付返回 `409`，订单继续保持 `paid`，不得重复扣库存或余额。
+
+并发要求：同一订单被同时支付多次时，只有一次返回 `200`，其余返回 `409`，余额只扣一次；同一用户同时支付多笔订单时，余额不得为负，余额不足的支付返回 `400`。
 
 #### REQ-ORDER-005 `POST /api/orders/{order_id}/cancel`
 
@@ -519,11 +533,11 @@ order.status = created
 
 ```text
 product.stock_after = product.stock_before_cancel + order.quantity
-user.balance_after = user.balance_before_cancel + order.amount
+user.balance_after = user.balance_before_cancel
 order.status = cancelled
 ```
 
-从完整业务流程观察，取消完成后的库存和余额应恢复到下单前的值。
+订单未支付，取消不涉及退款。从完整业务流程观察，取消完成后的库存和余额应恢复到下单前的值。
 
 错误响应：
 
@@ -535,15 +549,17 @@ order.status = cancelled
 
 验收条件：已支付订单和已取消订单不能再次取消；失败后不得重复增加库存或余额。
 
+并发要求：同一订单被同时取消多次时，只有一次返回 `200`，库存只恢复一次；支付和取消同时发生时，只有一个成功，另一个返回 `409`。
+
 ## 8. 数据一致性要求
 
 ### REQ-DATA-001 下单原子性
 
-扣减库存、扣减余额和创建订单必须全部成功或全部失败，不允许部分提交。
+扣减库存、占用优惠券次数和创建订单必须全部成功或全部失败，不允许部分提交。
 
 ### REQ-DATA-002 取消原子性
 
-恢复库存、恢复余额和更新订单状态必须全部成功或全部失败。
+恢复库存、恢复优惠券次数和更新订单状态必须全部成功或全部失败。
 
 ### REQ-DATA-003 金额快照
 
@@ -551,16 +567,16 @@ order.status = cancelled
 
 ### REQ-DATA-004 资源隔离
 
-用户只能查询、支付和取消自己的订单。
+用户只能查询、支付和取消自己的订单。管理员同样只能操作自己的订单，查询、支付、取消他人订单返回 `404`。
 
 ## 9. 安全要求
 
 - 密码使用 PBKDF2-SHA256 加盐哈希保存。
 - API 响应不得返回密码或密码哈希。
-- JWT 至少包含用户标识和过期时间。
+- JWT 至少包含用户标识、受众（`aud = mini-shop`）和过期时间；其他服务签发的 Token 返回 `401`。
 - Token、密码和数据库连接串不得写入测试证据或报告。
-- 生产环境不得使用项目内置的开发密钥。
-- 当前商品管理接口只要求登录，管理员角色属于后续版本范围。
+- 代码中不得内置密钥：未配置 `APP_SECRET_KEY` 时每次启动随机生成。
+- 商品和优惠券管理接口只允许管理员调用。
 
 ## 10. 可测试性与可追溯要求
 
@@ -580,22 +596,21 @@ order.status = cancelled
 | REQ-AUTH-002 | 正常登录 | 200、Token 存在 | 无业务数据变化 |
 | REQ-PRODUCT-003 | 创建商品 | 201 | 商品记录存在且字段一致 |
 | REQ-PRODUCT-005 | 下架商品 | 200 | 记录保留、状态为 `off_sale` |
-| REQ-ORDER-001 | 正常下单 | 201、响应结构正确 | 库存减少、余额减少、订单新增 |
+| REQ-ORDER-001 | 正常下单 | 201、响应结构正确 | 库存减少、余额不变、订单新增 |
 | REQ-ORDER-001 | 库存不足 | 400 | 库存、余额、订单数不变 |
-| REQ-ORDER-001 | 余额不足 | 400 | 库存、余额、订单数不变 |
+| REQ-ORDER-001 | 并发下单 | 201 / 400 | 成功数量不超过库存，库存不为负 |
 | REQ-ORDER-003 | 跨用户查询 | 404 | 不泄露其他用户订单 |
-| REQ-ORDER-004 | 正常支付 | 200 | 状态为 `paid` |
+| REQ-ORDER-004 | 正常支付 | 200 | 状态为 `paid`、余额减少订单金额 |
+| REQ-ORDER-004 | 余额不足支付 | 400 | 状态保持 `created`，余额不变 |
 | REQ-ORDER-004 | 重复支付 | 409 | 状态保持 `paid`，无重复副作用 |
-| REQ-ORDER-005 | 正常取消 | 200 | 状态取消、库存和余额恢复 |
+| REQ-ORDER-005 | 正常取消 | 200 | 状态取消、库存恢复、余额不变 |
 | REQ-ORDER-005 | 取消已支付订单 | 409 | 库存、余额和状态不变 |
 
 ## 12. 当前版本限制与后续优化
 
 以下内容不是当前 0.1.0 已实现能力：
 
-- 商品管理员和普通买家角色区分；
 - PostgreSQL、数据库迁移和生产级连接管理；
-- 并发下单防超卖；
 - 支付和取消的幂等键；
 - 金额字段使用精确 `Decimal/Numeric`；
 - 数据库 readiness 健康检查；
@@ -618,7 +633,7 @@ order.status = cancelled
 
 #### REQ-COUPON-001 `GET /api/coupons` 查询可用优惠券
 
-#### REQ-COUPON-002 `POST /api/coupons` 创建优惠券
+#### REQ-COUPON-002 `POST /api/coupons` 创建优惠券（仅管理员，普通用户返回 `403`）
 
 #### REQ-INVENTORY-001 `GET /api/inventory/{product_id}/transactions` 查询库存变更流水
 
@@ -635,8 +650,9 @@ order.status = cancelled
 - 优惠券 `code` 只能包含大写字母、数字、下划线和短横线，折扣比例为 `0 < discount_percent <= 100`。
 - `code` 唯一；重复创建返回 `409`，不得新增记录。
 - 下单传入 `coupon_code` 时，优惠券必须为 active 且 `used_count < max_uses`，否则返回 `400`，库存、余额和订单均不变。
-- 折后金额为 `round(price * quantity * (1 - discount_percent / 100), 2)`；订单保存优惠券编码和折后金额，用户余额按折后金额扣除。
+- 折后金额为 `round(price * quantity * (1 - discount_percent / 100), 2)`；订单保存优惠券编码和折后金额，支付时按折后金额扣除余额。
 - 达到使用次数后优惠券状态为 `exhausted`；取消使用该券的订单会恢复次数并重新激活。
+- 并发使用同一优惠券时，成功使用的次数不得超过 `max_uses`。
 
 ### 13.3 库存流水规则
 
@@ -655,7 +671,7 @@ order.status = cancelled
 | REQ-CART-005 | 删除购物车项 | 200 | cart_items 删除 |
 | REQ-COUPON-002 | 创建优惠券 | 201 | coupons 新增 |
 | REQ-COUPON-002 | 重复创建优惠券 | 409 | 不新增重复记录 |
-| REQ-ORDER-001 | 使用优惠券下单 | 201 | 订单折后金额、余额、库存及券次数正确变化 |
+| REQ-ORDER-001 | 使用优惠券下单 | 201 | 订单折后金额、库存及券次数正确变化；支付时按折后金额扣余额 |
 | REQ-ORDER-001 | 使用耗尽优惠券下单 | 400 | 订单、余额、库存和券次数不变 |
 | REQ-INVENTORY-001 | 查询库存流水 | 200 | 返回下单扣减和取消恢复流水 |
 

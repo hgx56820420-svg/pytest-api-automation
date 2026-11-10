@@ -26,6 +26,8 @@ Meeting 是一个用于验证测试框架时间类规则的最小会议室预约
 
 当前版本不包含定期预约、审批流和附件能力。
 
+角色：注册接口只创建普通用户；管理员账号由服务启动时按 `MEETING_ADMIN_USERNAME` / `MEETING_ADMIN_PASSWORD` 创建。会议室的创建、修改、停用只允许管理员，普通用户返回 `403`。Token 受众为 `meeting`，其他服务签发的 Token 返回 `401`。
+
 ## 3. 术语
 
 | 术语 | 定义 |
@@ -161,7 +163,7 @@ stateDiagram-v2
 
 #### REQ-MEET-ROOM-002 `POST /api/rooms`
 
-创建会议室。认证：需要。
+创建会议室。认证：需要，且必须是管理员。
 
 请求体：
 
@@ -181,11 +183,11 @@ stateDiagram-v2
 
 #### REQ-MEET-ROOM-004 `PUT /api/rooms/{room_id}`
 
-更新会议室信息。认证：需要。所有字段可选。
+更新会议室信息。认证：需要，且必须是管理员。所有字段可选。
 
 #### REQ-MEET-ROOM-005 `DELETE /api/rooms/{room_id}`
 
-停用会议室（软删除）：`status` 置为 `disabled`，记录保留。认证：需要。
+停用会议室（软删除）：`status` 置为 `disabled`，记录保留。认证：需要，且必须是管理员。
 
 ### 7.4 预约
 

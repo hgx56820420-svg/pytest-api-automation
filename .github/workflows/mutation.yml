@@ -1,0 +1,45 @@
+name: Mutation tests
+
+# 每晚跑一次：改坏商城的核心业务代码，看测试能不能发现。存活的变异体说明断言不够强。
+on:
+  schedule:
+    - cron: '0 18 * * *'   # UTC 18:00，北京时间凌晨 2 点
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutmut:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      DEMO_IN_PROCESS: '1'   # 服务在测试进程内启动，mutmut 才能看到服务代码
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - run: python -m pip install -r requirements.txt mutmut==3.8.1
+      - run: python -m pip install -e . --no-deps
+      - run: mutmut run --max-children 4
+      - name: Report surviving mutants
+        if: always()
+        run: |
+          mutmut results > mutmut-results.txt || true
+          cat mutmut-results.txt
+          {
+            echo "## Surviving mutants"
+            echo '```'
+            for m in $(grep -E 'survived|no tests' mutmut-results.txt | awk -F': ' '{print $1}' | tr -d ' '); do
+              echo "---- $m"
+              mutmut show "$m" | grep -E '^[-+][^-+]' | head -4
+            done
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutmut-results
+          path: mutmut-results.txt

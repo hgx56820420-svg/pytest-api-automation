@@ -19,6 +19,8 @@ archive/
 allure-results/
 allure-report/
 artifacts/
+build/
+mutants/
 report.html
 .coverage
 htmlcov/

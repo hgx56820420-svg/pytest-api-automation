@@ -1,184 +1,139 @@
 # pytest-api-automation
 
-需求文档驱动的 API 自动化测试 Agent：从 Markdown 需求文档解析接口，经多 Agent 审核生成用例与 pytest 脚本，通过契约门禁后执行真实 HTTP + 数据库校验，产出可审计的机器报告与证据链。
+接口业务测试框架：从需求文档设计用例，用 pytest 写测试，不只看状态码，还检查数据库里库存、余额、订单状态有没有按需求变化。AI 负责起草用例和脚本，确定性脚本负责校验，人负责审核。
 
-> Agent 负责理解、规划和审核；确定性工具负责解析、比较、执行、查库和汇总。
-> 真实结论必须能追溯到请求、响应和状态证据，缺失证据一律 `INCONCLUSIVE`。
-
-## 核心特性
-
-- **需求文档优先**：`REQ-XX-001` 格式的 Markdown 需求文档是主要输入，OpenAPI 退为运行时契约基准
-- **Workflow + Multi-Agent 分层**：LangGraph StateGraph 只负责路由、checkpoint 和 interrupt；需求、用例、脚本、执行、结果审核等确定性内容由独立 Workflow 承担，Agent 只保留语义分析职责
-- **审核路由回路**：审核失败路由回正确的前置 Agent，不盲目重跑全流程
-- **受限自修复**：修复次数有上限（默认 2 次），每次修复留真实 before/after diff；无进展或超限通过 LangGraph `interrupt` 暂停，人工决定后可从 SQLite checkpoint 恢复
-- **可恢复人工审核**：工作流状态保存在 SQLite checkpoint；`approve`、`retry`、`reject` 通过 `v2-resume` 从同一个 `run_id` 继续、重试或结束为 `NEEDS_HUMAN`
-- **Agent 内置 LLM 插件**：需求分析 Agent 通过可替换插件直接调用 OpenAI 兼容 API，不依赖 LangChain；结构化调用最多 4 次，纯文本 JSON 兜底最多 3 次，次数与退避由插件统一控制并可审计
-- **失败原因可追溯**：每次审核重试记录失败原因、前后产物 diff 和最终升级原因；LLM 每次调用的阶段、次数、成功/失败及异常摘要写入 `llm-retry-history.json`
-- **契约门禁**：基线与运行时 OpenAPI 比对，破坏性变化触发受影响用例的选择性再生
-- **证据链**：`run_id / case_id / operation_id / request_id` 四方关联，HTTP/数据库 before-after 快照、JSONL 日志、Allure 附件
-- **多被测对象**：adapter 插件机制，接入新服务只需注册一个 `DomainAdapter`，框架层零改动
-
-## 五阶段改造结果
-
-当前 V2 已按以下五个阶段完成重构：
-
-1. **Workflow 分层**：确定性的需求解析、用例设计、脚本生成、契约比较、执行和结果审核分别由独立 Workflow 负责；LangGraph 只负责流程路由、状态保存和人工中断。
-2. **需求阶段并行**：Markdown 需求解析与 OpenAPI 归一化可以同时执行，互不依赖的准备工作不再串行等待。
-3. **安全并行执行**：支持 `--parallel-workers`，但只有 Adapter 明确声明 `parallel_safe=True` 且安装 `pytest-xdist` 时才会真正并行；当前三个业务 Adapter 默认串行，避免共享数据库、账号和库存状态互相污染。
-4. **缓存与断点复用**：确定性产物按输入指纹写入 `workflow-cache.json`；LangGraph 使用 `workflow-checkpoints.sqlite3` 保存流程进度，人工审核后可从原节点恢复。
-5. **Agent 内置 LLM 插件**：已移除 LangChain。需求分析 Agent 通过 `api_agent/llm_plugin.py` 直接调用 OpenAI 兼容 API，模型输出必须经过 Pydantic 校验，模型不直接执行 SQL、Shell 或测试代码。
-
-默认情况下不会调用 LLM。只有显式传入 `--llm-analysis`，并且配置完整时，`analyze_requirements` 节点才会启用插件；其他 Workflow 均为确定性逻辑。插件的结构化 JSON 最多尝试 4 次，纯文本 JSON 兜底最多 3 次，所有重试、退避和失败原因都会写入 `llm-retry-history.json`。
-
-## 架构
-
-```text
-需求文档 (MD)                          OpenAPI 契约
-     │                                      │
-     ▼                                      ▼
-┌───────────────────── LangGraph StateGraph ─────────────────────┐
-│ RequirementWorkflow（Markdown/OpenAPI 并行）→ 需求审核              │
-│ CaseWorkflow → 覆盖审核 → ScriptWorkflow → 脚本审核                 │
-│     ▲          (失败回退到正确前置步骤，受限修复 ≤2 次)         │
-│     │                                                        │
-│     └─ ContractWorkflow ──► ExecutionWorkflow ──► ResultWorkflow      │
-│              ▲                │            │                  │
-│              └─ 选择性再生 ◄───┘      失败进修复回路                  │
-│                                                                 │
-│                 无进展/超限/破坏性契约 → human_review → interrupt │
-│                                                   ↘ resume      │
-└────────────────────────────────────────────────────────────────┘
-     │
-     ▼
-产物：parsed-requirement / test-cases / coverage / contract-diff /
-  execution-report / execution-mode / result-review / workflow-report /
-  workflow-cache / repair-history /
-     human-review / failure-scene / workflow-input / llm-rules /
-     workflow-checkpoints.sqlite3 /
-     evidence/<run_id>/*.json + agent-log.jsonl + Allure + JUnit
+```
+需求文档 + OpenAPI 契约
+   │  skill/api-test-design（Agent 起草）
+   ▼
+cases/<service>.yaml   规则（附需求原文）→ 覆盖矩阵（7 维）→ 测试点 → 用例
+   │  人审测试点、回答待确认问题；check_cases.py 校验整条链
+   ▼
+tests/<service>/*.py   pytest + api_agent 插件（api / db / admin fixture）
+   │  check_tests.py 拦截弱断言；每个响应按契约校验；失败自动留证据
+   ▼
+CI   PR：oasdiff 契约 → check_cases → check_tests → pytest      每晚：mutmut 变异测试
 ```
 
-## 被测对象（adapter）
+## 解决什么问题
 
-| Adapter | 服务 | 业务维度 | 接口 / 用例 | 端口 |
-|---|---|---|---|---|
-| `mini_shop`（默认） | [`app/`](app/) Mini Shop 电商 | 库存/余额副作用、购物车、优惠券、订单状态机 | 22 / 38 | 8010 |
-| `library` | [`services/library/`](services/library/) 图书借阅 | 副本/押金副作用、借阅状态机（borrowed→returned） | 12 / 26 | 8020 |
-| `meeting` | [`services/meeting/`](services/meeting/) 会议室预约 | 时间窗冲突（重叠 409、相邻放行）、金额快照 | 12 / 28 | 8030 |
+| 问题 | 做法 |
+|---|---|
+| 接口返回成功，业务其实错了（库存没扣、余额多扣、失败留下脏数据） | `db` fixture 只读查库，失败路径必须断言"数据库没变" |
+| 测试失败了不知道原因 | 每条测试自动记录请求、响应、`X-Request-ID`、数据库查询结果，失败时附在报告里 |
+| AI 生成的用例编造规则、只测正常路径 | 每条规则必须引用需求原文（脚本逐字核对）；7 维覆盖矩阵逼出异常、权限、并发；需求没写的变成问题，不让 AI 猜 |
+| AI 写的测试断言很弱 | `check_tests.py` 静态拦截无断言、常量断言、吞异常；mutmut 改坏业务代码，看测试能不能发现 |
+| 接口悄悄改了，调用方不知道 | 契约基线进 git，oasdiff 拦截破坏性变更；插件按契约校验每个真实响应 |
 
-三个领域共用同一套框架（工作流、审核、修复、证据链），每个 adapter 只注册四样东西：operation 场景映射、附加用例模板、场景执行器类、数据库观察者类（见 [`api_agent/adapters.py`](api_agent/adapters.py)）。
+## 实测结果
+
+在仓库自带的三个演示服务上（商城、图书借阅、会议室预约）：
+
+- **测试设计**：只给需求文档，按 Skill 盲测生成商城用例 112 条，其中 85 条是手写测试没有覆盖的；对照"必问清单"又提出 19 个需求没写清楚的问题（金额精度、重复下单、未支付订单占库存等）。
+- **并发测试发现 5 个真实缺陷**：库存 5 时 10 个并发下单全部成功（超卖）；只能用 1 次的优惠券被并发用了 4 次；并发注册、并发建券、并发加购各返回 500。已修复为条件 UPDATE。
+- **契约校验发现漂移**：时间字段不带时区，不符合 OpenAPI `date-time`；会议室冲突检查因此按墙上时间比较，跨时区预约会漏判冲突。已修复。
+- **变异测试发现测试漏洞**：去掉"购物车只查当前用户"的条件后原有测试全部通过；补测试后商城核心业务 442 个变异体全部被杀死。
+- **需求缺陷**：原需求允许任何登录用户创建优惠券，可以 100% 折扣 0 元下单；先改需求加管理员角色，再改代码。
+
+当前状态：业务测试 43 条、工具自身测试 37 条，全部通过；商城 108 条接口用例中 33 条已自动化（30%）。
+
+## 仓库结构
+
+```
+api_agent/   pytest 插件：fixture、响应契约校验、失败证据、安全护栏（约 360 行）
+skill/       api-test-design：测试设计四阶段 + 必问清单
+cases/       测试设计产物（YAML，在 PR 里人审）
+contracts/   接口基线（OpenAPI），接口有意变更时随 PR 更新
+scripts/     export_openapi.py、check_cases.py、check_tests.py
+tests/       业务测试按服务分目录；tests/plugin、tests/scripts 是工具自身的测试
+examples/    被测演示服务：mini_shop、library、meeting
+docs/        三个演示服务的需求文档
+```
 
 ## 快速开始
 
 ```powershell
-git clone https://github.com/hgx56820420-svg/pytest-api-automation.git
-cd pytest-api-automation
-python -m pip install -r requirements.txt
+python -m venv .venv
+.\.venv\Scripts\python -m pip install -r requirements.txt
+.\.venv\Scripts\python -m pip install -e . --no-deps
+.\.venv\Scripts\python -m pytest
 ```
 
-运行单测：
+`tests/conftest.py` 会用临时数据库自动启动三个演示服务，不需要手动起服务。
+
+## 写一条测试
+
+```python
+import pytest
+
+@pytest.mark.case("TC-ORDER-007")            # 关联 cases/mini_shop.yaml 里的用例
+def test_stock_boundary(api, db, create_product):
+    product = create_product(price=1, stock=3)
+    buyer = api.register()                    # 随机新用户，测试之间互不影响
+    before = db.row("products", product["id"])["stock"]
+
+    response = api.post("/api/orders", user=buyer, json={"product_id": product["id"], "quantity": 4})
+
+    assert response.status_code == 400
+    assert db.row("products", product["id"])["stock"] == before   # 失败时库存不能变
+```
+
+| fixture | 作用 |
+|---|---|
+| `api` | HTTP 客户端：`get/post/put/delete`、`register()`、`login()`；路径必须以 `/` 开头，只能发往被测服务；配置契约后每个响应都会校验 |
+| `db` | 只读查询：`row(table, id)`、`rows(table, **where)`、`count(table, **where)`；表名列名做标识符校验 |
+| `admin` | 用配置里的管理员账号登录后的用户 |
+
+## 质量门禁
+
+| 检查 | 时机 | 拦住什么 |
+|---|---|---|
+| `oasdiff breaking` | PR | 删字段、改类型、删接口等破坏性接口变更 |
+| `scripts/check_cases.py` | PR | 引用不到需求原文、接口不在契约里、待确认问题没回答、规则/矩阵/测试点/用例断链 |
+| `scripts/check_tests.py` | PR | 无断言、常量断言、吞异常、无理由 skip、缺用例编号、该查数据库的用例没查 |
+| `pytest --api-contract` | PR | 业务结果不符合预期；响应的状态码、字段和契约不一致 |
+| `mutmut` | 每晚 | 改坏业务代码后测试仍然通过（断言不够强） |
+
+## 指向真实测试环境
+
+不需要 `tests/conftest.py` 的演示服务，直接传参数或环境变量：
+
+| 参数 | 环境变量 | 说明 |
+|---|---|---|
+| `--api-base-url` | `API_BASE_URL` | 被测服务地址 |
+| `--api-db-url` | `API_DB_URL` | 测试库连接，请使用只读账号；SQLite 自动以只读模式打开 |
+| `--api-admin-user` / `--api-admin-password` | `API_ADMIN_USERNAME` / `API_ADMIN_PASSWORD` | 测试管理员账号 |
+| `--api-contract` | `API_CONTRACT` | 接口基线 OpenAPI JSON，需要 `pip install api-agent[contract]` |
+| `--api-evidence-dir` | | 证据目录，默认 `artifacts/evidence` |
+
+失败证据写入 `artifacts/evidence/<测试名>.json`，密码、token 自动替换为 `***`；每次运行结束写出 `case-results.json`（用例编号 → 结果）。
+
+## 接口兼容性检查
 
 ```powershell
-python -m pytest tests/ -v
+.\.venv\Scripts\python scripts/export_openapi.py contracts         # 第一次：建立基线，随 PR 提交并人审
+.\.venv\Scripts\python scripts/export_openapi.py build/openapi     # 之后：导出当前代码的接口
+docker run --rm -v "${PWD}:/w" -w /w tufin/oasdiff:v1.37.0 breaking contracts/mini_shop.openapi.json build/openapi/mini_shop.openapi.json --fail-on ERR
 ```
 
-跑一次完整的 V2 多 Agent 工作流（以 Meeting 为例）：
+## 变异测试
 
-```powershell
-# 终端 1：启动被测服务（独立 SQLite，禁止连生产库）
-$env:MEETING_DATABASE_URL = "sqlite:///./meeting-v2.db"
-python -m uvicorn services.meeting.main:app --host 127.0.0.1 --port 8030
+只能在 Linux / WSL 上跑（mutmut 需要 fork），服务要在测试进程内启动：
 
-# 终端 2：运行工作流
-python -m api_agent v2 `
-  --openapi http://127.0.0.1:8030/openapi.json `
-  --requirements-md docs/MEETING_API_REQUIREMENTS.md `
-  --base-url http://127.0.0.1:8030 `
-  --database-url sqlite:///./meeting-v2.db `
-  --output artifacts/meeting-v2 `
-  --adapter meeting
+```bash
+DEMO_IN_PROCESS=1 mutmut run --max-children 4
+mutmut results
 ```
 
-退出码：`0` PASS；`1` FAIL（业务断言失败）；`3` NEEDS_HUMAN（转人工审核）。工作流等待人工时会输出 `WAITING_HUMAN` 状态；由于 CLI 仍需返回非成功码以阻断流水线，该状态对应退出码 `3`。
+mutmut 不变异带装饰器的函数，所以路由函数只做参数注入，业务逻辑放在普通函数里（如 `place_order`、`pay`）。
 
-如果工作流需要人工审核，输出会包含 `WAITING_HUMAN`、审核原因和恢复命令。人工决定后，使用同一个 `run_id` 从 SQLite checkpoint 恢复，不需要从头重跑：
+## 已知限制
 
-```powershell
-python -m api_agent v2-resume `
-  --run-id run-xxxxxxxxxxxx `
-  --output artifacts/meeting-v2 `
-  --openapi http://127.0.0.1:8030/openapi.json `
-  --requirements-md docs/MEETING_API_REQUIREMENTS.md `
-  --base-url http://127.0.0.1:8030 `
-  --database-url sqlite:///./meeting-v2.db `
-  --adapter meeting `
-  --max-repair-attempts 2 `
-  --action approve `
-  --comment "确认此次契约变更"
-```
+- 插件的 `register()` / `login()` 假设 JSON 登录接口和 `access_token` 字段；表单登录或响应体包一层 `code/data` 的项目需要自己写登录 fixture。
+- 业务失败返回 HTTP 200 + 响应体错误码的项目，契约校验只能检查结构，业务结果要断言响应体。
+- 金额目前用 float 存储，精度问题已列为待确认问题，尚未修复。
+- `cases/mini_shop.yaml` 还有待确认问题未回答，`check_cases.py` 会报错，这是有意的：问题不回答就不能合入。
 
-`--action` 支持 `approve`、`retry`、`reject`：`approve` 只用于已确认的破坏性契约变更；普通审核失败必须使用 `retry` 或 `reject`。参数必须与首次运行一致，避免从错误的输入恢复。
+## 历史
 
-`--parallel-workers` 只在 Adapter 明确声明 `parallel_safe` 且安装 `pytest-xdist` 时生效；当前业务 Adapter 默认串行，避免共享 SQLite、测试账号和库存状态相互污染。实际模式写入 `execution-mode.json`。
-
-### 可选的 LLM 需求分析
-
-先配置 OpenAI 兼容网关的三个参数，再显式开启分析节点：
-
-```powershell
-$env:LLM_API_KEY = "your-api-key"
-$env:LLM_BASE_URL = "https://your-gateway.example/v1"
-$env:LLM_MODEL = "your-model"
-
-python -m api_agent v2 `
-  --openapi http://127.0.0.1:8010/openapi.json `
-  --requirements-md docs/MINI_SHOP_API_REQUIREMENTS.md `
-  --base-url http://127.0.0.1:8010 `
-  --database-url sqlite:///./agent-v2.db `
-  --output artifacts/v2 `
-  --adapter mini_shop `
-  --llm-analysis
-```
-
-LLM 只负责把自然语言需求拆解为经过校验的声明式规则；实际 HTTP 请求、数据库断言和副作用检查仍由确定性执行器完成。若输入文档、OpenAPI、模型或网关地址没有变化，已校验的 `llm-rules.json` 可以从 `workflow-cache.json` 复用，不会重复调用模型。
-
-V1 命令（`generate` / `check` / `run` / `pipeline`）保持兼容，见 [`docs/V1_USAGE.md`](docs/V1_USAGE.md)；V2 详细说明见 [`docs/V2_USAGE.md`](docs/V2_USAGE.md)。
-
-Allure 报告：`.\scripts\run_allure.ps1`（需要 Java 21+，详见 [`NEXT_MACHINE.md`](NEXT_MACHINE.md)）。
-
-## 接入新被测对象
-
-1. 新建 `services/<领域>/` FastAPI 服务（含认证 + CRUD + 状态机 + 可断言的副作用）
-2. 新增 `DomainAdapter`：operation 场景映射 + 附加用例模板 + `Executor`/`Observer` 子类 + 通配认证规则
-3. 编写 `docs/<领域>_API_REQUIREMENTS.md`（`#### REQ-XX-001 \`METHOD /path\`` 标题格式）
-4. 以 `--adapter <name>` 运行，框架层不需要任何改动
-
-## 测试与 CI
-
-```text
-tests/test_agent_v1.py        V1 规划/契约/脚本审核（9 个用例）
-tests/test_agent_v2.py        V2 工作流路由/修复/diff/checkpoint/interrupt（23 个用例）
-tests/test_agent_library.py   Library adapter 二次验证（8 个用例）
-tests/test_agent_meeting.py   Meeting adapter 二次验证（6 个用例）
-tests/test_agent_plugin.py    LLM 插件重试、脱敏、URL 和缓存（5 个用例）
-```
-
-当前测试总数：51 个。
-
-GitHub Actions（[`.github/workflows/tests.yml`](.github/workflows/tests.yml)）在每次 push 时运行全部测试。
-
-## 安全边界
-
-- HTTP 目标仅允许 `127.0.0.1` / `localhost`（hostname 精确白名单）
-- 数据库观察者仅接受显式 SQLite 测试库，禁止生产库
-- Agent 不执行任意 shell / SQL；删除、支付等高风险断言不自动放宽
-- Token、密码、连接串写入证据前递归脱敏；缺证据不报 PASS
-- checkpoint 只保存工作流状态和引用；业务修复 diff、人工审核请求和执行证据分别保存在独立产物中
-
-## Roadmap
-
-- [x] **V1** 最小可用闭环：OpenAPI → 用例 → pytest → 契约门禁 → 执行报告
-- [x] **V2** 多 Agent 审核回路 + 受限修复/diff + 结构化日志 + 多 adapter
-- [x] **V2.1** SQLite checkpoint + `interrupt` 人工审核 + `v2-resume` 断点恢复
-- [ ] **V3** 并发下单防超卖、幂等性、金额 Decimal 化、PostgreSQL + Alembic
-- [ ] **V4** Web 平台化：多项目、历史趋势、审批流、Prompt/模型版本管理
+v0.1 是基于 LangGraph 的多 Agent 编排版本。v0.2 重写为 pytest 插件：去掉 LangGraph 和内置 LLM 调用，用例生成交给 Agent + Skill，执行和校验全部是确定性代码，代码量从约 5900 行降到约 660 行（插件 + 脚本）。

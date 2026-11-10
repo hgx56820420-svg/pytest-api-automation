@@ -8,101 +8,57 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: false
 
 jobs:
-  test:
+  contract:
+    # 接口兼容性：当前代码导出的 OpenAPI 和仓库里的基线对比，有破坏性变更就失败
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
           cache: pip
-
-      - name: Install dependencies
-        run: python -m pip install -r requirements.txt
-
-      - name: Start API service
+      - run: python -m pip install -r requirements.txt
+      - run: python scripts/export_openapi.py build/openapi
+      - name: Check breaking changes with oasdiff
         run: |
-          nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8010 > uvicorn.log 2>&1 &
-          for i in {1..30}; do
-            if curl --fail --silent http://127.0.0.1:8010/health > /dev/null; then
-              exit 0
+          status=0
+          for current in build/openapi/*.openapi.json; do
+            baseline="contracts/$(basename "$current")"
+            if [ ! -f "$baseline" ]; then
+              echo "::error::missing baseline $baseline. Run 'python scripts/export_openapi.py contracts' and commit it in this PR."
+              status=1
+              continue
             fi
-            sleep 1
+            echo "== $baseline"
+            docker run --rm -v "$PWD:/w" -w /w tufin/oasdiff:v1.37.0 \
+              breaking "$baseline" "$current" --fail-on ERR || status=1
           done
-          cat uvicorn.log
-          exit 1
+          exit $status
 
-      - name: Run tests and collect Allure results
-        run: python -m pytest tests/ -v --alluredir allure-results
-
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pip install -e . --no-deps
+      # 需求规则 → 覆盖矩阵 → 测试点 → 用例 → pytest 的链条是否完整
+      - run: python scripts/check_cases.py cases/*.yaml
+      # 无断言、常量断言、吞异常、缺用例编号、该查库没查库
+      - run: python scripts/check_tests.py
+      # tests/conftest.py 会用临时数据库自动启动三个演示服务
+      - run: python -m pytest --junitxml=artifacts/junit.xml
       - name: Upload test artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: allure-results
-          path: |
-            allure-results/
-            uvicorn.log
+          name: test-artifacts
+          path: artifacts/
           if-no-files-found: warn
-
-  deploy-report:
-    needs: test
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Download Allure results
-        uses: actions/download-artifact@v4
-        with:
-          name: allure-results
-          path: allure-results
-
-      - name: Set up Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '21'
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: npm
-
-      - name: Install Allure command line
-        run: npm ci
-
-      - name: Generate Allure HTML report
-        run: node_modules/.bin/allure generate allure-results --clean -o allure-report
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}
-          path: allure-report
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-        with:
-          artifact_name: github-pages-${{ github.run_id }}-${{ github.run_attempt }}

@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "api-agent"
+version = "0.2.0"
+description = "pytest plugin for API business tests with database evidence"
+requires-python = ">=3.11"
+dependencies = ["pytest>=8", "requests>=2.31", "SQLAlchemy>=2.0"]
+
+[project.optional-dependencies]
+# --api-contract 需要
+contract = ["schemathesis>=4.33"]
+
+[project.entry-points.pytest11]
+api_agent = "api_agent.plugin"
+
+[tool.setuptools]
+packages = ["api_agent"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+# 变异测试：改坏商城的核心业务代码，看测试能不能发现。
+# 只能在 Linux / WSL 上跑（需要 fork），并且要设置 DEMO_IN_PROCESS=1，见 .github/workflows/mutation.yml
+[tool.mutmut]
+source_paths = [
+    "examples/mini_shop/routers/orders.py",
+    "examples/mini_shop/routers/cart.py",
+    "examples/mini_shop/routers/coupons.py",
+]
+pytest_add_cli_args_test_selection = ["tests/mini_shop"]
+also_copy = ["examples", "contracts", "cases", "api_agent", "scripts"]

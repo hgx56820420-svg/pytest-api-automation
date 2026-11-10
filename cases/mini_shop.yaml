@@ -1,0 +1,1455 @@
+service: mini_shop
+source: docs/MINI_SHOP_API_REQUIREMENTS.md
+
+# ① 需求规则
+rules:
+  - id: R-META-01
+    text: GET /health 无需认证，返回 200 且 status=ok
+    quote: "服务启动完成后返回 `200`。"
+    api: GET /health
+  - id: R-META-02
+    text: 注册、商品、订单等响应中的 created_at 等时间字段为 ISO 8601 日期时间字符串
+    quote: "时间字段使用 ISO 8601 日期时间字符串。"
+    api: GET /api/orders/{order_id}
+  # ---------- AUTH ----------
+  - id: R-AUTH-01
+    text: 注册成功返回 201，响应含 id/username/balance/created_at，余额等于默认余额 1000.00，数据库新增一条用户
+    quote: "注册成功后用户余额等于配置的默认余额。"
+    api: POST /api/auth/register
+  - id: R-AUTH-02
+    text: username 长度 3–20、password 长度 6–32，越界或缺字段返回 422，不新增用户
+    quote: "用户名或密码长度不合法"
+    api: POST /api/auth/register
+  - id: R-AUTH-03
+    text: 用户名重复注册返回 409 Username already exists，不新增重复用户
+    quote: "用户名在数据库中唯一。"
+    api: POST /api/auth/register
+  - id: R-AUTH-04
+    text: 密码以哈希保存，数据库和响应中不出现明文密码
+    quote: "密码必须以哈希形式保存，不得保存或返回明文。"
+    api: POST /api/auth/register
+  - id: R-AUTH-05
+    text: 用户名密码正确时登录返回 200，含 access_token 且 token_type=bearer，无业务数据变化
+    quote: "验证用户名和密码，返回 Bearer Token。"
+    api: POST /api/auth/login
+  - id: R-AUTH-06
+    text: 用户不存在与密码错误均返回 401 Incorrect username or password，响应完全相同
+    quote: "用户不存在和密码错误必须返回相同错误，避免泄露已注册用户名。"
+    api: POST /api/auth/login
+  - id: R-AUTH-07
+    text: 登录请求体缺字段或类型错误返回 422
+    quote: "请求体缺少字段或类型不合法"
+    api: POST /api/auth/login
+  - id: R-AUTH-08
+    text: GET /api/auth/me 返回当前 Token 用户的公开字段，不含 password_hash
+    quote: "返回 `User` 的公开字段，不得返回 `password_hash`。"
+    api: GET /api/auth/me
+  - id: R-AUTH-09
+    text: Token 缺失、格式错误、签名错误、过期或用户不存在时返回 401，带 WWW-Authenticate Bearer 头，detail=Invalid or missing credentials
+    quote: "Token 缺失、格式错误、签名错误、过期或用户不存在时，系统返回："
+    api: GET /api/auth/me
+  - id: R-AUTH-10
+    text: Token 默认有效期 60 分钟，过期后返回 401
+    quote: "默认 Token 有效期为 60 分钟，可通过环境配置修改。"
+    api: GET /api/auth/me
+  # ---------- PRODUCT ----------
+  - id: R-PRODUCT-01
+    text: 商品列表无需认证，默认 page=1、size=10，page>=1、1<=size<=100，越界返回 422；响应含 total/page/size/items
+    quote: "列表响应统一包含 `total`、`page`、`size` 和 `items`。"
+    api: GET /api/products
+  - id: R-PRODUCT-02
+    text: 商品列表支持 keyword 名称包含匹配与 status 过滤，按 ID 升序，total 为过滤后总数
+    quote: "结果按商品 ID 升序排列，`total` 为过滤后的总记录数。"
+    api: GET /api/products
+  - id: R-PRODUCT-03
+    text: 商品详情无需认证，存在返回 200；不存在返回 404 Product not found；product_id 非整数返回 422
+    quote: "`product_id` 不是整数"
+    api: GET /api/products/{product_id}
+  - id: R-PRODUCT-04
+    text: 管理员创建商品返回 201，默认 status=on_sale，数据库新增记录且 ID/名称/价格/库存与响应一致
+    quote: "数据库验收：必须新增一条商品记录，响应中的 ID、名称、价格、库存和数据库一致。"
+    api: POST /api/products
+  - id: R-PRODUCT-05
+    text: 创建商品时 name 长度 1–100、price>0、stock>=0，违反返回 422，不新增商品
+    quote: "`name` 长度为 1–100；"
+    api: POST /api/products
+  - id: R-PRODUCT-06
+    text: 管理员更新商品只更新提交字段，未提交字段保持不变
+    quote: "数据库验收：已提交字段被更新，未提交字段保持不变。"
+    api: PUT /api/products/{product_id}
+  - id: R-PRODUCT-07
+    text: 更新商品时商品不存在返回 404，字段违反约束返回 422，数据库不变
+    quote: "字段值违反商品约束"
+    api: PUT /api/products/{product_id}
+  - id: R-PRODUCT-08
+    text: 管理员下架商品为软删除，返回 200 和下架后的商品，记录保留且 status=off_sale
+    quote: "此操作是软删除，不得物理删除商品记录。"
+    api: DELETE /api/products/{product_id}
+  - id: R-PRODUCT-09
+    text: 商品下架后，引用该商品的历史订单仍可正常查询
+    quote: "历史订单对商品的引用必须保持有效。"
+    api: DELETE /api/products/{product_id}
+  # ---------- PERM ----------
+  - id: R-PERM-01
+    text: 注册接口只创建普通用户，注册用户无管理员权限
+    quote: "注册接口只创建普通用户"
+    api: POST /api/auth/register
+  - id: R-PERM-02
+    text: 普通用户创建商品返回 403，商品数不变
+    quote: "商品和优惠券的创建、修改、下架只允许管理员，普通用户调用返回 `403`，数据库不变。"
+    api: POST /api/products
+  - id: R-PERM-03
+    text: 普通用户更新商品返回 403，商品字段不变
+    quote: "商品和优惠券的创建、修改、下架只允许管理员，普通用户调用返回 `403`，数据库不变。"
+    api: PUT /api/products/{product_id}
+  - id: R-PERM-04
+    text: 普通用户下架商品返回 403，商品状态不变
+    quote: "商品和优惠券的创建、修改、下架只允许管理员，普通用户调用返回 `403`，数据库不变。"
+    api: DELETE /api/products/{product_id}
+  - id: R-PERM-05
+    text: 普通用户创建优惠券返回 403，优惠券数不变
+    quote: "创建优惠券（仅管理员，普通用户返回 `403`）"
+    api: POST /api/coupons
+  - id: R-PERM-06
+    text: 未携带 Token 调用商品/优惠券管理接口返回 401，数据库不变
+    quote: "商品和优惠券管理接口只允许管理员调用。"
+    api: POST /api/products
+  # ---------- ORDER ----------
+  - id: R-ORDER-01
+    text: 正常下单返回 201，amount=round(price*quantity,2)，status=created；库存减 quantity、余额不变（下单不扣余额）、订单数加 1
+    quote: "amount = round(product.price * quantity, 2)"
+    api: POST /api/orders
+  - id: R-ORDER-02
+    text: quantity 必须 1–100、product_id 必须为整数，违反返回 422，库存/余额/订单数不变
+    quote: "`quantity` 必须大于 0 且不超过 100。"
+    api: POST /api/orders
+  - id: R-ORDER-03
+    text: 商品不存在下单返回 404 Product not found
+    quote: "商品存在；"
+    api: POST /api/orders
+  - id: R-ORDER-04
+    text: 商品已下架下单返回 400 Product is not on sale
+    quote: "商品状态为 `on_sale`；"
+    api: POST /api/orders
+  - id: R-ORDER-05
+    text: 库存少于购买数量返回 400 Insufficient stock；数量等于库存时成功
+    quote: "商品库存不少于购买数量。"
+    api: POST /api/orders
+  - id: R-ORDER-07
+    text: 多个前置条件同时不满足时按 存在→在售→库存 的顺序返回第一个失败的错误（余额不参与下单校验）
+    quote: "创建前置条件按顺序为："
+    api: POST /api/orders
+  - id: R-ORDER-08
+    text: 任意前置条件失败时库存、余额和订单总数均不变
+    quote: "失败不变量：任意前置条件失败时，库存、余额和订单总数均不得变化。"
+    api: POST /api/orders
+  - id: R-ORDER-09
+    text: 所有订单接口未认证返回 401 Invalid or missing credentials
+    quote: "所有订单接口均需要认证。"
+    api: POST /api/orders
+  - id: R-ORDER-10
+    text: 订单列表只返回当前用户订单，按订单 ID 升序
+    quote: "只能返回当前用户的订单；"
+    api: GET /api/orders
+  - id: R-ORDER-11
+    text: 订单列表 status 过滤，total 为当前用户过滤后的订单数
+    quote: "`total` 是当前用户经过状态过滤后的订单数量。"
+    api: GET /api/orders
+  - id: R-ORDER-12
+    text: 订单列表分页 page>=1、1<=size<=100，越界返回 422
+    quote: "`1 <= size <= 100`"
+    api: GET /api/orders
+  - id: R-ORDER-13
+    text: 订单详情返回自己的订单；订单不存在或属于其他用户都返回 404 Order not found
+    quote: "其他用户的订单也返回 `404`，避免通过状态码探测资源是否存在。"
+    api: GET /api/orders/{order_id}
+  - id: R-ORDER-14
+    text: 支付 created 订单返回 200，状态改为 paid，余额减少订单金额，库存不变
+    quote: "支付当前用户的已创建订单，并按订单金额扣减余额。"
+    api: POST /api/orders/{order_id}/pay
+  - id: R-ORDER-15
+    text: 重复支付返回 409，订单保持 paid，库存和余额不再变化
+    quote: "重复支付返回 `409`，订单继续保持 `paid`，不得重复扣库存或余额。"
+    api: POST /api/orders/{order_id}/pay
+  - id: R-ORDER-16
+    text: 支付已取消订单返回 409，状态保持 cancelled，库存余额不变
+    quote: "对终态订单再次支付或取消必须返回 `409`。"
+    api: POST /api/orders/{order_id}/pay
+  - id: R-ORDER-17
+    text: 支付不存在或他人的订单返回 404，订单状态不变
+    quote: "订单不存在或不属于当前用户"
+    api: POST /api/orders/{order_id}/pay
+  - id: R-ORDER-18
+    text: 取消 created 订单返回 200，状态 cancelled，库存加回 quantity；订单未支付，余额不变（无退款）；库存和余额等于下单前的值
+    quote: "订单未支付，取消不涉及退款。从完整业务流程观察，取消完成后的库存和余额应恢复到下单前的值。"
+    api: POST /api/orders/{order_id}/cancel
+  - id: R-ORDER-19
+    text: 已支付或已取消订单再次取消返回 409，库存、余额和状态不变
+    quote: "已支付订单和已取消订单不能再次取消；失败后不得重复增加库存或余额。"
+    api: POST /api/orders/{order_id}/cancel
+  - id: R-ORDER-20
+    text: 取消不存在或他人的订单返回 404，订单、库存、余额不变
+    quote: "订单不存在或不属于当前用户"
+    api: POST /api/orders/{order_id}/cancel
+  - id: R-ORDER-21
+    text: 支付时余额不少于订单金额才成功（余额等于金额时成功且余额变 0）；余额不足返回 400 Insufficient balance，订单保持 created，库存、余额、订单数不变
+    quote: "成功条件：订单当前状态必须为 `created`，且当前用户余额不少于订单金额。"
+    api: POST /api/orders/{order_id}/pay
+  - id: R-ORDER-22
+    text: 多个请求并发购买同一商品时，成功订单总数量不超过下单前库存，库存不为负，库存不足的请求返回 400 Insufficient stock
+    quote: "多个请求同时购买同一商品时，成功的订单总数量不得超过下单前库存，库存不得为负；库存不足的请求返回 `400 Insufficient stock`。"
+    api: POST /api/orders
+  - id: R-ORDER-23
+    text: 同一订单并发支付多次时只有一次 200，其余 409，余额只扣一次
+    quote: "同一订单被同时支付多次时，只有一次返回 `200`，其余返回 `409`，余额只扣一次；"
+    api: POST /api/orders/{order_id}/pay
+  - id: R-ORDER-24
+    text: 同一用户并发支付多笔订单时余额不为负，余额不足的支付返回 400
+    quote: "同一用户同时支付多笔订单时，余额不得为负，余额不足的支付返回 `400`。"
+    api: POST /api/orders/{order_id}/pay
+  - id: R-ORDER-25
+    text: 同一订单并发取消多次时只有一次 200，其余 409，库存只恢复一次，余额不变
+    quote: "同一订单被同时取消多次时，只有一次返回 `200`，库存只恢复一次；"
+    api: POST /api/orders/{order_id}/cancel
+  - id: R-ORDER-26
+    text: 同一订单支付与取消并发时只有一个成功，另一个返回 409，库存和余额只按成功的操作变化一次
+    quote: "支付和取消同时发生时，只有一个成功，另一个返回 `409`。"
+    api: POST /api/orders/{order_id}/cancel
+  # ---------- DATA ----------
+  - id: R-DATA-01
+    text: 下单时扣库存、占用优惠券次数、建订单全部成功或全部失败
+    quote: "扣减库存、占用优惠券次数和创建订单必须全部成功或全部失败，不允许部分提交。"
+    api: POST /api/orders
+  - id: R-DATA-02
+    text: 取消时恢复库存、恢复优惠券次数、更新状态全部成功或全部失败
+    quote: "恢复库存、恢复优惠券次数和更新订单状态必须全部成功或全部失败。"
+    api: POST /api/orders/{order_id}/cancel
+  - id: R-DATA-03
+    text: 订单金额为创建时快照，商品改价后历史订单金额不变（支付时按原 amount 扣余额）
+    quote: "商品后续改价不得修改历史订单金额。"
+    api: PUT /api/products/{product_id}
+  - id: R-DATA-04
+    text: 用户只能查询、支付、取消自己的订单
+    quote: "用户只能查询、支付和取消自己的订单。"
+    api: GET /api/orders/{order_id}
+  - id: R-DATA-05
+    text: 非法状态流转不得修改库存、余额或订单状态
+    quote: "非法流转不得再次修改库存、余额或订单状态。"
+    api: POST /api/orders/{order_id}/pay
+  - id: R-DATA-06
+    text: 管理员与普通用户一样只能操作自己的订单，查询、支付、取消他人订单返回 404，订单状态和买家余额不变
+    quote: "管理员同样只能操作自己的订单，查询、支付、取消他人订单返回 `404`。"
+    api: GET /api/orders/{order_id}
+  # ---------- CART ----------
+  - id: R-CART-01
+    text: 所有购物车接口未携带有效 Token 返回 401
+    quote: "所有购物车接口都需要 Bearer Token，只能读取和修改当前用户数据。"
+    api: GET /api/cart
+  - id: R-CART-02
+    text: 购物车按用户隔离，查询只返回当前用户的购物车项，修改不影响其他用户
+    quote: "购物车必须按用户隔离"
+    api: GET /api/cart
+  - id: R-CART-03
+    text: 添加在售商品到购物车返回 201，新增 cart_items；商品不存在或未在售时不得新增
+    quote: "添加商品时商品必须存在且为 `on_sale`"
+    api: POST /api/cart/items
+  - id: R-CART-04
+    text: 同一用户重复添加同一商品时合并为一条，数量相加
+    quote: "同一用户重复添加时合并数量。"
+    api: POST /api/cart/items
+  - id: R-CART-05
+    text: 合并后数量必须大于 0 且不超过当前库存，否则返回 400，cart_items 不变
+    quote: "合并后的数量必须大于 0 且不超过当前库存，否则返回 `400`，数据库不得变化。"
+    api: POST /api/cart/items
+  - id: R-CART-06
+    text: 购物车请求体 quantity 不满足 0<quantity<=100 或缺字段时返回 422
+    quote: "未通过 FastAPI/Pydantic 参数校验时返回 `422`。"
+    api: POST /api/cart/items
+  - id: R-CART-07
+    text: 修改购物车数量成功返回 200，数量被设置为新值
+    quote: "修改购物车数量"
+    api: PUT /api/cart/items/{product_id}
+  - id: R-CART-08
+    text: 修改数量时路径 product_id 必须与请求体一致；购物车项不存在返回 404
+    quote: "修改数量时路径中的 `product_id` 必须和请求体一致；不存在的购物车项返回 `404`。"
+    api: PUT /api/cart/items/{product_id}
+  - id: R-CART-09
+    text: 删除购物车项成功返回 200 和当前购物车；删除不存在项返回 404
+    quote: "删除不存在项返回 `404`。"
+    api: DELETE /api/cart/items/{product_id}
+  - id: R-CART-10
+    text: 清空购物车返回 200 和当前（空）购物车，仅删除当前用户的 cart_items
+    quote: "清空和删除操作成功后返回当前购物车；"
+    api: DELETE /api/cart
+  # ---------- COUPON ----------
+  - id: R-COUPON-01
+    text: 管理员创建优惠券返回 201，coupons 新增一条，字段与请求一致
+    quote: "创建优惠券"
+    api: POST /api/coupons
+  - id: R-COUPON-02
+    text: code 只能含大写字母、数字、下划线、短横线；0<discount_percent<=100；违反返回 422，不新增
+    quote: "优惠券 `code` 只能包含大写字母、数字、下划线和短横线，折扣比例为 `0 < discount_percent <= 100`。"
+    api: POST /api/coupons
+  - id: R-COUPON-03
+    text: code 唯一，重复创建返回 409，不新增记录
+    quote: "`code` 唯一；重复创建返回 `409`，不得新增记录。"
+    api: POST /api/coupons
+  - id: R-COUPON-04
+    text: GET /api/coupons 返回可用优惠券列表
+    quote: "查询可用优惠券"
+    api: GET /api/coupons
+  - id: R-COUPON-05
+    text: 使用优惠券下单，订单保存 coupon_code 和折后金额，库存扣减，券 used_count 加 1，下单时余额不变；支付时按折后金额扣余额
+    quote: "订单保存优惠券编码和折后金额，支付时按折后金额扣除余额。"
+    api: POST /api/orders
+  - id: R-COUPON-06
+    text: 折后金额 = round(price*quantity*(1-discount_percent/100), 2)
+    quote: "折后金额为 `round(price * quantity * (1 - discount_percent / 100), 2)`；"
+    api: POST /api/orders
+  - id: R-COUPON-07
+    text: 优惠券非 active 或 used_count>=max_uses 时下单返回 400，库存、余额、订单和券次数不变
+    quote: "优惠券必须为 active 且 `used_count < max_uses`，否则返回 `400`，库存、余额和订单均不变。"
+    api: POST /api/orders
+  - id: R-COUPON-08
+    text: used_count 达到 max_uses 后优惠券 status=exhausted
+    quote: "达到使用次数后优惠券状态为 `exhausted`；"
+    api: POST /api/orders
+  - id: R-COUPON-09
+    text: 取消使用优惠券的订单，used_count 减 1，exhausted 券重新变为 active
+    quote: "取消使用该券的订单会恢复次数并重新激活。"
+    api: POST /api/orders/{order_id}/cancel
+  - id: R-COUPON-10
+    text: 使用优惠券但因其他前置条件（库存不足、商品下架）失败时，券 used_count 和状态不变
+    quote: "订单、余额、库存和券次数不变"
+    api: POST /api/orders
+  - id: R-COUPON-11
+    text: 并发使用同一优惠券下单时，成功使用次数不超过 max_uses，失败请求返回 400
+    quote: "并发使用同一优惠券时，成功使用的次数不得超过 `max_uses`。"
+    api: POST /api/orders
+  # ---------- INVENTORY ----------
+  - id: R-INV-01
+    text: 每次成功下单新增一条 quantity_change=-quantity、reason=order_created 的库存流水
+    quote: "每次成功下单新增一条 `quantity_change = -quantity`、`reason = order_created` 的流水。"
+    api: POST /api/orders
+  - id: R-INV-02
+    text: 每次成功取消新增一条 quantity_change=+quantity、reason=order_cancelled、reference_id=订单 ID 的流水
+    quote: "每次成功取消订单新增一条 `quantity_change = +quantity`、`reason = order_cancelled` 的流水，并关联订单 ID。"
+    api: POST /api/orders/{order_id}/cancel
+  - id: R-INV-03
+    text: 失败的下单、重复支付、非法取消不产生库存流水
+    quote: "失败的下单、重复支付、非法取消不得产生库存流水。"
+    api: POST /api/orders
+  - id: R-INV-04
+    text: 库存流水查询需登录，只返回指定商品的流水，商品不存在返回 404
+    quote: "查询接口只返回指定商品流水，并要求登录；不存在商品返回 `404`。"
+    api: GET /api/inventory/{product_id}/transactions
+  # ---------- SEC ----------
+  - id: R-SEC-01
+    text: JWT 含用户标识、aud=mini-shop、exp；其他服务签发（aud 不同或密钥不同）的 Token 返回 401
+    quote: "其他服务签发的 Token 返回 `401`。"
+    api: GET /api/auth/me
+  - id: R-SEC-02
+    text: 密码使用 PBKDF2-SHA256 加盐哈希保存，相同密码的两个用户哈希不同
+    quote: "密码使用 PBKDF2-SHA256 加盐哈希保存。"
+    api: POST /api/auth/register
+  - id: R-SEC-03
+    text: 任何 API 响应不得返回密码或密码哈希
+    quote: "API 响应不得返回密码或密码哈希。"
+    api: GET /api/auth/me
+  - id: R-SEC-04
+    text: Token、密码和数据库连接串不得出现在测试证据或报告中
+    quote: "Token、密码和数据库连接串不得写入测试证据或报告。"
+  - id: R-SEC-05
+    text: 代码不内置密钥，未配置 APP_SECRET_KEY 时每次启动随机生成（重启后旧 Token 失效）
+    quote: "未配置 `APP_SECRET_KEY` 时每次启动随机生成。"
+  # ---------- TRACE ----------
+  - id: R-TRACE-01
+    text: 服务提供 /openapi.json 运行时契约，且与基线契约无破坏性差异
+    quote: "FastAPI 必须提供 `/openapi.json` 作为运行时契约。"
+  - id: R-TRACE-02
+    text: 关键业务测试缺少 HTTP 响应或数据库 before/after 证据时结论为 INCONCLUSIVE
+    quote: "缺少关键证据时结论为 `INCONCLUSIVE`，不得判定为 `PASS`。"
+  - id: R-TRACE-03
+    text: 每个测试请求携带唯一 request_id，测试证据中可按 request_id 关联到对应请求
+    quote: "测试请求应携带唯一 `request_id`，用于后续关联日志。"
+
+questions:
+  - id: Q-01
+    text: 下单时已扣余额，支付（created→paid）是否还会改变余额或库存？需求只写了重复支付不得重复扣，未写首次支付的余额/库存副作用。
+    status: answered
+    answer: 下单不扣余额，支付（created→paid）时按订单金额扣余额；余额不足支付返回 400 Insufficient balance，订单保持 created。
+  - id: Q-02
+    text: 第 12 节称"并发下单防超卖"不是当前已实现能力。并发下单同一商品时是否仍要求库存不为负、成功单数不超过库存？若出现超卖应判为缺陷还是已知限制？
+    status: answered
+    answer: 并发超卖是缺陷，后端已修复；并发下单成功数量不得超过库存，库存不为负。
+  - id: Q-03
+    text: 并发使用剩余 1 次的优惠券下单（或并发下单耗尽余额）时，是否要求只有一单成功、used_count 不超过 max_uses、余额不为负？
+    status: answered
+    answer: 是。并发使用同一优惠券成功次数不超过 max_uses；同一用户并发支付多笔订单时余额不得为负，余额不足的返回 400。
+  - id: Q-04
+    text: 第 12 节称支付和取消无幂等键。同一订单并发支付、并发取消、支付与取消并发时，期望是否为恰好一个成功、其余 409 且库存/余额只变化一次？
+    status: answered
+    answer: 是。并发支付/并发取消/支付与取消并发时恰好一个成功，其余 409，库存和余额只变化一次。
+  - id: Q-05
+    text: PUT /api/cart/items/{product_id} 路径 product_id 与请求体不一致时返回什么状态码和 detail（400、409 还是 422）？
+    status: open
+  - id: Q-06
+    text: PUT 修改购物车数量超过当前库存时是否同样返回 400 且数据库不变？13.1 只对"合并后的数量"写了库存约束。修改不在售商品的购物车项如何处理？
+    status: open
+  - id: Q-07
+    text: 添加购物车时商品不存在、商品已下架分别返回什么状态码和 detail（404/400）？
+    status: open
+  - id: Q-08
+    text: GET /api/coupons 是否需要认证？"可用优惠券"是只返回 active，还是也返回 exhausted 等状态？是否分页、排序规则是什么？
+    status: open
+  - id: Q-09
+    text: 新建优惠券的初始 status 和 used_count 是什么（推测 active/0）？除 active/exhausted 外还有哪些状态、如何进入（例如停用）？
+    status: open
+  - id: Q-10
+    text: 下单传入不存在的 coupon_code 返回 400 还是 404，detail 是什么？coupon_code 是否大小写敏感？
+    status: open
+  - id: Q-11
+    text: 优惠券校验在 存在→在售→库存→余额 四个前置条件中的哪个位置？余额校验按原价还是折后金额？
+    status: open
+  - id: Q-12
+    text: 库存流水查询是任意登录用户都可查任意商品，还是仅管理员？流水排序和是否分页？
+    status: open
+  - id: Q-13
+    text: 管理员创建商品或通过 PUT 修改 stock 是否产生库存流水？支付是否产生流水？order_created 流水的 reference_id 是否为订单 ID？
+    status: open
+  - id: Q-14
+    text: 对已下架商品再次 DELETE 返回 200 还是 409？下架商品已在购物车中时购物车项如何处理？
+    status: open
+  - id: Q-15
+    text: 管理员是否可以查询、支付、取消其他用户的订单，还是与普通用户一样返回 404？
+    status: answered
+    answer: 管理员与普通用户一样，只能操作自己的订单；查询、支付、取消他人订单返回 404。
+  - id: Q-16
+    text: 普通用户对不存在的商品调用 PUT/DELETE 时返回 403 还是 404（权限与存在性检查顺序）？未认证管理接口是否返回 401 而非 403？
+    status: open
+  - id: Q-17
+    text: 测试环境的管理员账号（APP_ADMIN_USERNAME/APP_ADMIN_PASSWORD）和用于构造过期/伪造 Token 的配置（短有效期或 APP_SECRET_KEY）如何提供给测试？
+    status: open
+  - id: Q-18
+    text: 用户名是否大小写敏感、首尾空格是否裁剪（Alice 与 alice 是否视为重复）？
+    status: open
+  - id: Q-19
+    text: 订单创建后商品被下架或改价，此时支付是否仍允许？取消是否仍按订单 quantity/amount 恢复？
+    status: open
+  - id: Q-20
+    text: '[归属] 第 2 节写"商品和优惠券的创建、修改、下架只允许管理员"，但契约只有 GET/POST /api/coupons。管理员要把已创建券 SAVE10 的 discount_percent 从 10 改为 20、或把它下架，应调用哪个接口（如 PUT /api/coupons/{id}、DELETE /api/coupons/{id}）？若不提供，是否从需求中删掉优惠券的修改/下架？'
+    status: open
+  - id: Q-21
+    text: '[状态终态] off_sale 是否为终态：管理员对已下架商品 PUT /api/products/{id} {"status":"on_sale"} 是返回 200 并重新上架，还是 409？对 off_sale 商品 PUT {"price":129.0} 返回 200 还是 409？'
+    status: open
+  - id: Q-22
+    text: '[幂等与重复] 库存 10 时同一买家连续两次提交完全相同的 POST /api/orders {"product_id":1,"quantity":2}（无幂等键），结果是创建 2 个订单、库存变为 6，还是第二次被拒绝（返回哪个状态码）？'
+    status: open
+  - id: Q-23
+    text: '[幂等与重复] 管理员连续两次 POST /api/products {"name":"Keyboard","price":99.0,"stock":10}，第二次是返回 201 并新增第二条同名商品，还是返回 409？'
+    status: open
+  - id: Q-24
+    text: '[幂等与重复] 同一买家用 max_uses=5 的券 SAVE10 连续下 2 单，第二单是返回 201 且 used_count=2，还是因每人限用 1 次返回 400？'
+    status: open
+  - id: Q-25
+    text: '[并发] 管理员 DELETE /api/products/{id} 下架与买家 POST /api/orders 购买该商品同时发生时，是否允许出现"订单 201、status=created，但商品已 off_sale"？出现时判为缺陷还是允许？'
+    status: open
+  - id: Q-26
+    text: '[并发] 商品库存 10 时，管理员 PUT /api/products/{id} {"stock":5} 与买家下单 3 件同时发生，最终库存应为 5、2 还是 7？下单成功后库存是否允许被管理员直接覆盖？'
+    status: open
+  - id: Q-27
+    text: '[并发] 库存 5 的商品在买家购物车中已有 3 件，该买家并发发出 2 次 POST /api/cart/items 各加 2 件，是否要求恰好 1 个 201、1 个 400，最终 quantity=5（不得出现 7）？'
+    status: open
+  - id: Q-28
+    text: '[金额与数值] 订单金额舍入方式：price=1.005、quantity=1 时 amount 是 1.01（十进制四舍五入）还是 1.0（Python round 对二进制浮点的结果）？price=0.125、quantity=1 时是 0.13 还是 0.12（银行家舍入）？'
+    status: open
+  - id: Q-29
+    text: '[金额与数值] 创建商品 price=9.999（3 位小数）是返回 422，还是 201 并保存为 9.999 或 10.0？price=100000000、stock=2147483648 是否允许，price 和 stock 的上限各是多少？'
+    status: open
+  - id: Q-30
+    text: '[金额与数值] 余额 1000.00 的买家依次支付 3 笔 amount=0.1 的订单后，响应和数据库中的 balance 应为 999.7 还是 999.6999999999999？余额是否始终保留 2 位小数？'
+    status: open
+  - id: Q-31
+    text: '[金额与数值] 创建优惠券 max_uses=0、max_uses=-1、max_uses=1.5 时返回 422 还是 201？max_uses 有无上限？discount_percent=12.345（3 位小数）返回 201 还是 422？'
+    status: open
+  - id: Q-32
+    text: '[时间] created_at 的时区：响应应为 "2026-09-01T08:00:00Z"（UTC 带 Z），还是不带时区的 "2026-09-01T16:00:00"（服务器本地时间）？数据库中按 UTC 还是本地时间保存？'
+    status: open
+  - id: Q-33
+    text: '[时间] created 订单是否有支付时限：下单后 30 分钟（或多少分钟）未支付是否自动变为 cancelled 并恢复库存？若没有时限，created 订单可以无限期占用库存吗？'
+    status: open
+  - id: Q-34
+    text: '[时间] 优惠券是否有有效期字段（如 starts_at/expires_at）？若有，创建 expires_at 为昨天的券返回 422 还是 201，用已过期的券下单是否返回 400？'
+    status: open
+  - id: Q-35
+    text: '[时间] 购物车项是否会过期：加入购物车后 7 天未操作的 cart_item 是否仍保留在 GET /api/cart 结果中？'
+    status: open
+  - id: Q-36
+    text: '[级联影响] 商品改价 99.0→129.0 后，GET /api/cart 中该项显示的单价是 129.0（实时价）还是加入时的 99.0？管理员把库存从 10 改为 2 后，购物车中 quantity=5 的项是保留为 5、自动改为 2，还是被删除？'
+    status: open
+  - id: Q-37
+    text: '[级联影响] 买家购物车中有商品 A×2，随后直接 POST /api/orders 购买 A×2 成功，购物车中 A 的项是仍保留 quantity=2，还是被移除或扣减？'
+    status: open
+  - id: Q-38
+    text: '[审计与可追溯] 支付订单扣减余额 198.0 时，是否需要记录一条余额流水（关联 user_id、order_id、变动 -198.0）？还是只以 orders.status=paid 和 users.balance 的前后差值作为证据？'
+    status: open
+
+# ② 覆盖矩阵
+coverage:
+  R-META-01: {happy: test, boundary: "n/a: 接口无参数", invalid_input: "n/a: 接口无请求参数或请求体", permission: "n/a: 需求规定无需认证，happy 即不带 Token 调用", state: "n/a: 无业务状态", side_effect: "n/a: 只读存活探针", concurrency: "n/a: 只读，无共享写"}
+  R-META-02: {happy: test, boundary: "n/a: 格式约定无数值边界，时区见 Q-32", invalid_input: "n/a: 约束的是响应格式，与请求输入无关", permission: "n/a: 与权限无关，各接口认证由对应规则覆盖", state: "n/a: 不涉及状态流转", side_effect: "n/a: 只检查响应字段格式", concurrency: "n/a: 格式检查无共享写"}
+  R-AUTH-01: {happy: test, boundary: "n/a: 长度边界由 R-AUTH-02 覆盖", invalid_input: "n/a: 由 R-AUTH-02 覆盖", permission: "n/a: 注册无需认证", state: "n/a: 重复注册由 R-AUTH-03 覆盖", side_effect: test, concurrency: "n/a: 并发重名由 R-AUTH-03 覆盖"}
+  R-AUTH-02: {happy: "n/a: 由 R-AUTH-01 覆盖", boundary: test, invalid_input: test, permission: "n/a: 注册无需认证", state: "n/a: 与已有用户无关", side_effect: test, concurrency: "n/a: 校验失败不写库"}
+  R-AUTH-03: {happy: "n/a: 首次注册由 R-AUTH-01 覆盖", boundary: "n/a: 大小写是否视为重复见 Q-18", invalid_input: "n/a: 请求体合法，仅用户名冲突", permission: "n/a: 注册无需认证", state: test, side_effect: test, concurrency: test}
+  R-AUTH-04: {happy: "n/a: 注册成功由 R-AUTH-01 覆盖", boundary: "n/a: 与长度无关", invalid_input: "n/a: 与输入校验无关", permission: "n/a: 注册无需认证", state: "n/a: 无状态流转", side_effect: test, concurrency: "n/a: 单用户存储格式"}
+  R-AUTH-05: {happy: test, boundary: "n/a: 长度边界在注册时校验", invalid_input: "n/a: 由 R-AUTH-07 覆盖", permission: "n/a: 登录无需认证", state: "n/a: 无状态流转", side_effect: test, concurrency: "n/a: 登录无共享写"}
+  R-AUTH-06: {happy: "n/a: 成功登录由 R-AUTH-05 覆盖", boundary: "n/a: 不涉及数值边界", invalid_input: test, permission: "n/a: 登录本身是认证入口", state: "n/a: 无状态", side_effect: "n/a: 登录失败无写操作", concurrency: "n/a: 无共享写"}
+  R-AUTH-07: {happy: "n/a: 由 R-AUTH-05 覆盖", boundary: "n/a: 登录未定义长度约束", invalid_input: test, permission: "n/a: 登录无需认证", state: "n/a: 无状态", side_effect: "n/a: 校验失败无写操作", concurrency: "n/a: 无共享写"}
+  R-AUTH-08: {happy: test, boundary: "n/a: 无参数", invalid_input: "n/a: 无请求体", permission: "n/a: 无效 Token 由 R-AUTH-09 覆盖", state: "n/a: 无状态", side_effect: "n/a: 只读", concurrency: "n/a: 只读"}
+  R-AUTH-09: {happy: "n/a: 有效 Token 由 R-AUTH-08 覆盖", boundary: "n/a: 过期边界由 R-AUTH-10 覆盖", invalid_input: "n/a: 认证头问题归入 permission", permission: test, state: "n/a: 无状态", side_effect: "n/a: 只读", concurrency: "n/a: 只读"}
+  R-AUTH-10: {happy: "n/a: 有效期内由 R-AUTH-08 覆盖", boundary: test, invalid_input: "n/a: 无输入", permission: "n/a: 由 R-AUTH-09 覆盖", state: "n/a: 无状态", side_effect: "n/a: 只读", concurrency: "n/a: 只读"}
+  R-PRODUCT-01: {happy: test, boundary: test, invalid_input: test, permission: "n/a: 列表无需认证，happy 不带 Token", state: "n/a: 状态过滤由 R-PRODUCT-02 覆盖", side_effect: "n/a: 只读", concurrency: "n/a: 只读"}
+  R-PRODUCT-02: {happy: test, boundary: "n/a: 分页边界由 R-PRODUCT-01 覆盖", invalid_input: "n/a: 非法 status 值由 R-PRODUCT-01 invalid_input 覆盖", permission: "n/a: 无需认证", state: "n/a: 过滤属于 happy 场景", side_effect: "n/a: 只读", concurrency: "n/a: 只读"}
+  R-PRODUCT-03: {happy: test, boundary: "n/a: 无数值输入边界", invalid_input: test, permission: "n/a: 无需认证", state: "n/a: 下架商品能否查看需求未限制，happy 已覆盖", side_effect: "n/a: 只读", concurrency: "n/a: 只读"}
+  R-PRODUCT-04: {happy: test, boundary: "n/a: 由 R-PRODUCT-05 覆盖", invalid_input: "n/a: 由 R-PRODUCT-05 覆盖", permission: "n/a: 由 R-PERM-02 覆盖", state: "n/a: 新建资源无前置状态", side_effect: test, concurrency: "n/a: 商品名无唯一约束"}
+  R-PRODUCT-05: {happy: "n/a: 由 R-PRODUCT-04 覆盖", boundary: test, invalid_input: test, permission: "n/a: 由 R-PERM-02 覆盖", state: "n/a: 无状态", side_effect: test, concurrency: "n/a: 校验失败不写库"}
+  R-PRODUCT-06: {happy: test, boundary: "n/a: 约束边界与创建相同，由 R-PRODUCT-07 覆盖", invalid_input: "n/a: 由 R-PRODUCT-07 覆盖", permission: "n/a: 由 R-PERM-03 覆盖", state: "n/a: 重新上架见 Q-14", side_effect: test, concurrency: "n/a: 需求未定义并发更新语义"}
+  R-PRODUCT-07: {happy: "n/a: 由 R-PRODUCT-06 覆盖", boundary: "n/a: 越界值作为 invalid_input 测试", invalid_input: test, permission: "n/a: 由 R-PERM-03 覆盖", state: "n/a: 无状态", side_effect: test, concurrency: "n/a: 失败不写库"}
+  R-PRODUCT-08: {happy: test, boundary: "n/a: 无数值参数", invalid_input: "n/a: 不存在商品行为见 Q-14/Q-16", permission: "n/a: 由 R-PERM-04 覆盖", state: "n/a: 重复下架未定义，见 Q-14", side_effect: test, concurrency: "n/a: 需求未定义并发下架"}
+  R-PRODUCT-09: {happy: "n/a: 下架成功由 R-PRODUCT-08 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 无输入", permission: "n/a: 管理员操作", state: "n/a: 订单状态不受影响已在 side_effect 断言", side_effect: test, concurrency: "n/a: 无并发写"}
+  R-PERM-01: {happy: "n/a: 注册成功由 R-AUTH-01 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 注册请求体无 role 字段", permission: test, state: "n/a: 无状态", side_effect: "n/a: 权限结果在 permission 中断言", concurrency: "n/a: 无并发"}
+  R-PERM-02: {happy: "n/a: 管理员创建由 R-PRODUCT-04 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 请求体合法，仅角色不足", permission: test, state: "n/a: 无状态", side_effect: test, concurrency: "n/a: 无并发"}
+  R-PERM-03: {happy: "n/a: 由 R-PRODUCT-06 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 请求体合法", permission: test, state: "n/a: 无状态", side_effect: test, concurrency: "n/a: 无并发"}
+  R-PERM-04: {happy: "n/a: 由 R-PRODUCT-08 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 无请求体", permission: test, state: "n/a: 无状态", side_effect: test, concurrency: "n/a: 无并发"}
+  R-PERM-05: {happy: "n/a: 由 R-COUPON-01 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 请求体合法", permission: test, state: "n/a: 无状态", side_effect: test, concurrency: "n/a: 无并发"}
+  R-PERM-06: {happy: "n/a: 由管理员 happy 用例覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 请求体合法", permission: test, state: "n/a: 无状态", side_effect: "n/a: 未认证不进入业务逻辑，403 场景已断言数据库", concurrency: "n/a: 无并发"}
+  R-ORDER-01: {happy: test, boundary: "n/a: 数量边界由 R-ORDER-02/05 覆盖", invalid_input: "n/a: 由 R-ORDER-02 覆盖", permission: "n/a: 由 R-ORDER-09 覆盖", state: "n/a: 新订单初始状态在 happy 断言", side_effect: test, concurrency: "n/a: 并发超卖由 R-ORDER-22 覆盖"}
+  R-ORDER-02: {happy: "n/a: 由 R-ORDER-01 覆盖", boundary: test, invalid_input: test, permission: "n/a: 由 R-ORDER-09 覆盖", state: "n/a: 不涉及状态", side_effect: "n/a: 不变量由 R-ORDER-08 统一断言，boundary 用例同时断言", concurrency: "n/a: 校验失败不写库"}
+  R-ORDER-03: {happy: "n/a: 由 R-ORDER-01 覆盖", boundary: "n/a: 无数值", invalid_input: test, permission: "n/a: 由 R-ORDER-09 覆盖", state: "n/a: 商品不存在不是状态", side_effect: "n/a: 由 R-ORDER-08 覆盖", concurrency: "n/a: 失败不写库"}
+  R-ORDER-04: {happy: "n/a: 由 R-ORDER-01 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 请求体合法", permission: "n/a: 由 R-ORDER-09 覆盖", state: test, side_effect: "n/a: 由 R-ORDER-08 覆盖", concurrency: "n/a: 下架与下单并发未定义"}
+  R-ORDER-05: {happy: "n/a: 由 R-ORDER-01 覆盖", boundary: test, invalid_input: "n/a: 请求体合法", permission: "n/a: 由 R-ORDER-09 覆盖", state: "n/a: 不涉及状态", side_effect: "n/a: 由 R-ORDER-08 覆盖", concurrency: "n/a: 并发下单由 R-ORDER-22 覆盖"}
+  R-ORDER-07: {happy: "n/a: 仅描述失败顺序", boundary: "n/a: 无数值", invalid_input: "n/a: 请求体合法", permission: "n/a: 由 R-ORDER-09 覆盖", state: test, side_effect: "n/a: 由 R-ORDER-08 覆盖", concurrency: "n/a: 单请求顺序"}
+  R-ORDER-08: {happy: "n/a: 仅约束失败路径", boundary: "n/a: 边界由 R-ORDER-05 覆盖", invalid_input: "n/a: 由 R-ORDER-02 覆盖", permission: "n/a: 由 R-ORDER-09 覆盖", state: "n/a: 下架场景在 side_effect 中断言", side_effect: test, concurrency: "n/a: 由 R-ORDER-22 覆盖"}
+  R-ORDER-09: {happy: "n/a: 认证成功由其它订单用例覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 认证问题归 permission", permission: test, state: "n/a: 无状态", side_effect: "n/a: 401 场景同时断言数据不变，见用例", concurrency: "n/a: 无并发"}
+  R-ORDER-10: {happy: test, boundary: "n/a: 分页由 R-ORDER-12 覆盖", invalid_input: "n/a: 由 R-ORDER-11/12 覆盖", permission: test, state: "n/a: 过滤由 R-ORDER-11 覆盖", side_effect: "n/a: 只读", concurrency: "n/a: 只读"}
+  R-ORDER-11: {happy: test, boundary: "n/a: 分页由 R-ORDER-12 覆盖", invalid_input: test, permission: "n/a: 由 R-ORDER-10 覆盖", state: "n/a: 状态过滤已在 happy 覆盖三种状态", side_effect: "n/a: 只读", concurrency: "n/a: 只读"}
+  R-ORDER-12: {happy: "n/a: 默认分页在 R-ORDER-10 覆盖", boundary: test, invalid_input: "n/a: 越界值在 boundary 断言 422", permission: "n/a: 由 R-ORDER-10 覆盖", state: "n/a: 无状态", side_effect: "n/a: 只读", concurrency: "n/a: 只读"}
+  R-ORDER-13: {happy: test, boundary: "n/a: 无数值", invalid_input: test, permission: test, state: "n/a: 任意状态订单均可查询", side_effect: "n/a: 只读", concurrency: "n/a: 只读"}
+  R-ORDER-14: {happy: test, boundary: "n/a: 余额边界由 R-ORDER-21 覆盖", invalid_input: "n/a: order_id 非整数由 R-ORDER-17 覆盖", permission: "n/a: 由 R-ORDER-17 覆盖", state: "n/a: 非法状态由 R-ORDER-15/16 覆盖", side_effect: test, concurrency: "n/a: 由 R-ORDER-23/24 覆盖"}
+  R-ORDER-15: {happy: "n/a: 由 R-ORDER-14 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 请求合法", permission: "n/a: 由 R-ORDER-17 覆盖", state: test, side_effect: test, concurrency: "n/a: 并发重复支付由 R-ORDER-23 覆盖"}
+  R-ORDER-16: {happy: "n/a: 由 R-ORDER-14 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 请求合法", permission: "n/a: 由 R-ORDER-17 覆盖", state: test, side_effect: test, concurrency: "n/a: 支付与取消并发由 R-ORDER-26 覆盖"}
+  R-ORDER-17: {happy: "n/a: 由 R-ORDER-14 覆盖", boundary: "n/a: 无数值", invalid_input: test, permission: test, state: "n/a: 由 R-ORDER-15/16 覆盖", side_effect: "n/a: permission 用例同时断言订单不变", concurrency: "n/a: 无并发"}
+  R-ORDER-18: {happy: test, boundary: "n/a: 无数值", invalid_input: "n/a: 请求合法", permission: "n/a: 由 R-ORDER-20 覆盖", state: "n/a: 非法状态由 R-ORDER-19 覆盖", side_effect: test, concurrency: "n/a: 支付与取消并发由 R-ORDER-26 覆盖"}
+  R-ORDER-19: {happy: "n/a: 由 R-ORDER-18 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 请求合法", permission: "n/a: 由 R-ORDER-20 覆盖", state: test, side_effect: test, concurrency: "n/a: 并发重复取消由 R-ORDER-25 覆盖"}
+  R-ORDER-20: {happy: "n/a: 由 R-ORDER-18 覆盖", boundary: "n/a: 无数值", invalid_input: test, permission: test, state: "n/a: 由 R-ORDER-19 覆盖", side_effect: "n/a: permission 用例同时断言数据不变", concurrency: "n/a: 无并发"}
+  R-ORDER-21: {happy: "n/a: 余额充足的支付由 R-ORDER-14 覆盖", boundary: test, invalid_input: "n/a: 支付无请求体", permission: "n/a: 由 R-ORDER-17 覆盖", state: "n/a: 非 created 状态由 R-ORDER-15/16 覆盖", side_effect: test, concurrency: "n/a: 并发支付多笔订单由 R-ORDER-24 覆盖"}
+  R-ORDER-22: {happy: "n/a: 单次下单由 R-ORDER-01 覆盖", boundary: "n/a: 单请求库存边界由 R-ORDER-05 覆盖", invalid_input: "n/a: 请求体合法", permission: "n/a: 由 R-ORDER-09 覆盖", state: "n/a: 不涉及订单状态", side_effect: "n/a: 库存和订单数在 concurrency 用例中断言", concurrency: test}
+  R-ORDER-23: {happy: "n/a: 单次支付由 R-ORDER-14 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 请求合法", permission: "n/a: 由 R-ORDER-17 覆盖", state: "n/a: 串行重复支付由 R-ORDER-15 覆盖", side_effect: "n/a: 余额只扣一次在 concurrency 用例中断言", concurrency: test}
+  R-ORDER-24: {happy: "n/a: 单次支付由 R-ORDER-14 覆盖", boundary: "n/a: 单笔余额边界由 R-ORDER-21 覆盖", invalid_input: "n/a: 请求合法", permission: "n/a: 由 R-ORDER-17 覆盖", state: "n/a: 不涉及非法状态", side_effect: "n/a: 余额和 paid 订单数在 concurrency 用例中断言", concurrency: test}
+  R-ORDER-25: {happy: "n/a: 单次取消由 R-ORDER-18 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 请求合法", permission: "n/a: 由 R-ORDER-20 覆盖", state: "n/a: 串行重复取消由 R-ORDER-19 覆盖", side_effect: "n/a: 库存、余额、流水在 concurrency 用例中断言", concurrency: test}
+  R-ORDER-26: {happy: "n/a: 单独支付/取消由 R-ORDER-14/18 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 请求合法", permission: "n/a: 由 R-ORDER-17/20 覆盖", state: "n/a: 终态流转由 R-ORDER-16/19 覆盖", side_effect: "n/a: 最终库存余额在 concurrency 用例中断言", concurrency: test}
+  R-DATA-01: {happy: "n/a: 全部成功由 R-ORDER-01 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 由 R-ORDER-02 覆盖", permission: "n/a: 与权限无关", state: "n/a: 与状态无关", side_effect: test, concurrency: "n/a: 由 R-ORDER-22/R-COUPON-11 覆盖"}
+  R-DATA-02: {happy: "n/a: 由 R-ORDER-18 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 无请求体", permission: "n/a: 与权限无关", state: "n/a: 由 R-ORDER-19 覆盖", side_effect: test, concurrency: "n/a: 由 R-ORDER-25/26 覆盖"}
+  R-DATA-03: {happy: "n/a: 改价本身由 R-PRODUCT-06 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 无", permission: "n/a: 管理员操作", state: "n/a: 支付后改价与否不影响快照，side_effect 统一断言", side_effect: test, concurrency: "n/a: 无并发"}
+  R-DATA-04: {happy: "n/a: 本人操作由订单 happy 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 无", permission: test, state: "n/a: 无", side_effect: "n/a: 已在 R-ORDER-17/20 断言", concurrency: "n/a: 无并发"}
+  R-DATA-05: {happy: "n/a: 仅约束非法流转", boundary: "n/a: 无数值", invalid_input: "n/a: 请求合法", permission: "n/a: 与权限无关", state: test, side_effect: "n/a: 已在 state 用例中断言数据库不变", concurrency: "n/a: 由 R-ORDER-23/25 覆盖"}
+  R-DATA-06: {happy: "n/a: 本人操作由订单 happy 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 无请求体", permission: test, state: "n/a: 不涉及状态流转", side_effect: "n/a: permission 用例同时断言订单状态和买家余额不变", concurrency: "n/a: 无并发"}
+  R-CART-01: {happy: "n/a: 由 R-CART-03 等覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 认证归 permission", permission: test, state: "n/a: 无状态", side_effect: "n/a: 401 用例同时断言 cart_items 不变", concurrency: "n/a: 无并发"}
+  R-CART-02: {happy: "n/a: 本人查询由 R-CART-03 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 无", permission: test, state: "n/a: 无状态", side_effect: test, concurrency: "n/a: 不同用户无共享数据"}
+  R-CART-03: {happy: test, boundary: "n/a: 数量边界由 R-CART-05 覆盖", invalid_input: "n/a: 由 R-CART-06 覆盖", permission: "n/a: 由 R-CART-01 覆盖", state: test, side_effect: test, concurrency: "n/a: 并发合并由 R-CART-04 覆盖"}
+  R-CART-04: {happy: test, boundary: "n/a: 合并上限由 R-CART-05 覆盖", invalid_input: "n/a: 请求合法", permission: "n/a: 由 R-CART-01 覆盖", state: "n/a: 无状态", side_effect: "n/a: happy 中断言只有一条 cart_item", concurrency: test}
+  R-CART-05: {happy: "n/a: 由 R-CART-03 覆盖", boundary: test, invalid_input: "n/a: 由 R-CART-06 覆盖", permission: "n/a: 由 R-CART-01 覆盖", state: "n/a: 无状态", side_effect: test, concurrency: "n/a: 由 R-CART-04 覆盖"}
+  R-CART-06: {happy: "n/a: 由 R-CART-03 覆盖", boundary: "n/a: 0 与 101 在 invalid_input 覆盖", invalid_input: test, permission: "n/a: 由 R-CART-01 覆盖", state: "n/a: 无状态", side_effect: "n/a: 422 用例同时断言 cart_items 不变", concurrency: "n/a: 不写库"}
+  R-CART-07: {happy: test, boundary: test, invalid_input: "n/a: 由 R-CART-08 覆盖", permission: "n/a: 由 R-CART-01 覆盖", state: "n/a: 不在售商品见 Q-06", side_effect: "n/a: happy 中断言数据库数量", concurrency: "n/a: 需求未定义并发修改语义"}
+  R-CART-08: {happy: "n/a: 由 R-CART-07 覆盖", boundary: "n/a: 无数值", invalid_input: test, permission: "n/a: 修改他人项等同不存在，在 invalid_input 覆盖", state: "n/a: 无状态", side_effect: test, concurrency: "n/a: 失败不写库"}
+  R-CART-09: {happy: test, boundary: "n/a: 无数值", invalid_input: test, permission: test, state: "n/a: 无状态", side_effect: "n/a: happy 中断言 cart_items 删除", concurrency: "n/a: 需求未定义并发删除"}
+  R-CART-10: {happy: test, boundary: "n/a: 空购物车清空在 happy 覆盖", invalid_input: "n/a: 无请求体", permission: "n/a: 隔离在 side_effect 断言", state: "n/a: 无状态", side_effect: test, concurrency: "n/a: 无并发"}
+  R-COUPON-01: {happy: test, boundary: "n/a: 由 R-COUPON-02 覆盖", invalid_input: "n/a: 由 R-COUPON-02 覆盖", permission: "n/a: 由 R-PERM-05 覆盖", state: "n/a: 初始状态见 Q-09", side_effect: test, concurrency: "n/a: 并发重复创建由 R-COUPON-03 覆盖"}
+  R-COUPON-02: {happy: "n/a: 由 R-COUPON-01 覆盖", boundary: test, invalid_input: test, permission: "n/a: 由 R-PERM-05 覆盖", state: "n/a: 无状态", side_effect: test, concurrency: "n/a: 不写库"}
+  R-COUPON-03: {happy: "n/a: 由 R-COUPON-01 覆盖", boundary: "n/a: 无数值", invalid_input: "n/a: 请求合法", permission: "n/a: 由 R-PERM-05 覆盖", state: test, side_effect: test, concurrency: test}
+  R-COUPON-04: {happy: test, boundary: "n/a: 分页未定义，见 Q-08", invalid_input: "n/a: 无参数", permission: "n/a: 是否需认证未定义，见 Q-08", state: "n/a: 过滤范围见 Q-08", side_effect: "n/a: 只读", concurrency: "n/a: 只读"}
+  R-COUPON-05: {happy: test, boundary: "n/a: 由 R-COUPON-06 覆盖", invalid_input: "n/a: 不存在券见 Q-10", permission: "n/a: 由 R-ORDER-09 覆盖", state: "n/a: 由 R-COUPON-07 覆盖", side_effect: test, concurrency: "n/a: 由 R-COUPON-11 覆盖"}
+  R-COUPON-06: {happy: "n/a: 由 R-COUPON-05 覆盖", boundary: test, invalid_input: "n/a: 由 R-COUPON-02 覆盖", permission: "n/a: 无", state: "n/a: 无", side_effect: "n/a: 支付时余额扣减由 R-COUPON-05 断言", concurrency: "n/a: 计算无并发"}
+  R-COUPON-07: {happy: "n/a: 由 R-COUPON-05 覆盖", boundary: "n/a: used_count=max_uses-1 在 R-COUPON-08 覆盖", invalid_input: "n/a: 不存在券见 Q-10", permission: "n/a: 无", state: test, side_effect: test, concurrency: "n/a: 并发用券由 R-COUPON-11 覆盖"}
+  R-COUPON-08: {happy: "n/a: 状态转换归 state", boundary: "n/a: 已在 state 中用 max_uses 边界断言", invalid_input: "n/a: 无", permission: "n/a: 无", state: test, side_effect: "n/a: state 中断言 coupons 表", concurrency: "n/a: 由 R-COUPON-11 覆盖"}
+  R-COUPON-09: {happy: "n/a: 状态转换归 state", boundary: "n/a: 无", invalid_input: "n/a: 无", permission: "n/a: 由 R-ORDER-20 覆盖", state: test, side_effect: test, concurrency: "n/a: 由 R-ORDER-25 覆盖"}
+  R-COUPON-10: {happy: "n/a: 仅约束失败路径", boundary: "n/a: 无", invalid_input: "n/a: 无", permission: "n/a: 无", state: "n/a: 下架场景并入 side_effect", side_effect: test, concurrency: "n/a: 由 R-COUPON-11 覆盖"}
+  R-COUPON-11: {happy: "n/a: 单次用券由 R-COUPON-05 覆盖", boundary: "n/a: 次数上限由 R-COUPON-07/08 覆盖", invalid_input: "n/a: 请求体合法", permission: "n/a: 由 R-ORDER-09 覆盖", state: "n/a: exhausted 转换由 R-COUPON-08 覆盖", side_effect: "n/a: used_count、订单数、库存在 concurrency 用例中断言", concurrency: test}
+  R-INV-01: {happy: test, boundary: "n/a: 数量边界不影响流水格式", invalid_input: "n/a: 失败不产生流水由 R-INV-03 覆盖", permission: "n/a: 由 R-INV-04 覆盖", state: "n/a: 无", side_effect: test, concurrency: "n/a: 由 R-ORDER-22 覆盖"}
+  R-INV-02: {happy: test, boundary: "n/a: 无", invalid_input: "n/a: 由 R-INV-03 覆盖", permission: "n/a: 由 R-INV-04 覆盖", state: "n/a: 非法取消由 R-INV-03 覆盖", side_effect: test, concurrency: "n/a: 由 R-ORDER-25 覆盖"}
+  R-INV-03: {happy: "n/a: 仅约束失败路径", boundary: "n/a: 无", invalid_input: "n/a: 失败下单场景并入 side_effect", permission: "n/a: 无", state: "n/a: 状态场景并入 side_effect", side_effect: test, concurrency: "n/a: 由 R-ORDER-23/25 覆盖"}
+  R-INV-04: {happy: test, boundary: "n/a: 无分页约定，见 Q-12", invalid_input: test, permission: test, state: "n/a: 无", side_effect: "n/a: 只读", concurrency: "n/a: 只读"}
+  R-SEC-01: {happy: "n/a: 有效 Token 由 R-AUTH-08 覆盖", boundary: "n/a: 无", invalid_input: "n/a: 归 permission", permission: test, state: "n/a: 无", side_effect: "n/a: 只读", concurrency: "n/a: 无"}
+  R-SEC-02: {happy: "n/a: 由 R-AUTH-01 覆盖", boundary: "n/a: 无", invalid_input: "n/a: 无", permission: "n/a: 无", state: "n/a: 无", side_effect: test, concurrency: "n/a: 无"}
+  R-SEC-03: {happy: test, boundary: "n/a: 无", invalid_input: "n/a: 无", permission: "n/a: 无", state: "n/a: 无", side_effect: "n/a: 只检查响应", concurrency: "n/a: 无"}
+  R-SEC-04: {happy: "n/a: 属于报告审查", boundary: "n/a: 无", invalid_input: "n/a: 无", permission: "n/a: 无", state: "n/a: 无", side_effect: test, concurrency: "n/a: 无"}
+  R-SEC-05: {happy: "n/a: 需重启服务", boundary: "n/a: 无", invalid_input: "n/a: 无", permission: test, state: "n/a: 无", side_effect: "n/a: 无", concurrency: "n/a: 无"}
+  R-TRACE-01: {happy: test, boundary: "n/a: 无", invalid_input: "n/a: 无", permission: "n/a: 无需认证", state: "n/a: 无", side_effect: "n/a: 只读", concurrency: "n/a: 无"}
+  R-TRACE-02: {happy: test, boundary: "n/a: 无", invalid_input: "n/a: 无", permission: "n/a: 无", state: "n/a: 无", side_effect: "n/a: 属于报告规则", concurrency: "n/a: 无"}
+  R-TRACE-03: {happy: test, boundary: "n/a: 无数值", invalid_input: "n/a: 约束测试框架，不是接口输入", permission: "n/a: 与权限无关", state: "n/a: 无状态", side_effect: "n/a: 不改变业务数据，只检查证据记录", concurrency: "n/a: 唯一性在 happy 中按全量请求断言"}
+
+# ③ 测试点
+test_points:
+  - {id: TP-META-01-01, rule: R-META-01, dimension: happy, text: 不带 Token 调用 /health 返回 200 且 status=ok}
+  - {id: TP-META-02-01, rule: R-META-02, dimension: happy, text: "注册、创建商品、下单、查询订单详情响应中的 created_at 均能按 ISO 8601 日期时间解析"}
+  - {id: TP-AUTH-01-01, rule: R-AUTH-01, dimension: happy, text: 合法用户名密码注册返回 201，响应含 id/username/balance=1000.0/created_at}
+  - {id: TP-AUTH-01-02, rule: R-AUTH-01, dimension: side_effect, text: 注册后 users 表新增一条，balance=1000.00}
+  - {id: TP-AUTH-02-01, rule: R-AUTH-02, dimension: boundary, text: username 长度 3 和 20、password 长度 6 和 32 成功；username 2/21、password 5/33 返回 422}
+  - {id: TP-AUTH-02-02, rule: R-AUTH-02, dimension: invalid_input, text: 缺 username、缺 password、字段类型为数字时返回 422}
+  - {id: TP-AUTH-02-03, rule: R-AUTH-02, dimension: side_effect, text: 校验失败后 users 表记录数不变}
+  - {id: TP-AUTH-03-01, rule: R-AUTH-03, dimension: state, text: 已存在用户名再次注册返回 409 Username already exists}
+  - {id: TP-AUTH-03-02, rule: R-AUTH-03, dimension: side_effect, text: 重复注册后该用户名仍只有一条记录，原用户密码和余额不变}
+  - {id: TP-AUTH-03-03, rule: R-AUTH-03, dimension: concurrency, text: 并发 10 个同名注册请求，只有 1 个 201，其余 409，数据库只有一条}
+  - {id: TP-AUTH-04-01, rule: R-AUTH-04, dimension: side_effect, text: 数据库 password_hash 不等于且不包含明文密码，注册响应不含 password/password_hash}
+  - {id: TP-AUTH-05-01, rule: R-AUTH-05, dimension: happy, text: 正确用户名密码登录返回 200，access_token 非空，token_type=bearer，Token 可访问 /api/auth/me}
+  - {id: TP-AUTH-05-02, rule: R-AUTH-05, dimension: side_effect, text: 登录前后用户余额、订单数、商品数无变化}
+  - {id: TP-AUTH-06-01, rule: R-AUTH-06, dimension: invalid_input, text: 错误密码与不存在用户名登录都返回 401，detail 均为 Incorrect username or password，响应体相同}
+  - {id: TP-AUTH-07-01, rule: R-AUTH-07, dimension: invalid_input, text: 登录缺 username、缺 password、空请求体、password 为整数时返回 422}
+  - {id: TP-AUTH-08-01, rule: R-AUTH-08, dimension: happy, text: /api/auth/me 返回当前用户 id/username/balance/created_at，与数据库一致，不含 password_hash}
+  - {id: TP-AUTH-09-01, rule: R-AUTH-09, dimension: permission, text: 无 Authorization、非 Bearer 格式、随机字符串、签名被篡改的 Token、指向不存在用户的 Token 均返回 401，带 WWW-Authenticate Bearer 和固定 detail}
+  - {id: TP-AUTH-10-01, rule: R-AUTH-10, dimension: boundary, text: 超过有效期的 Token 返回 401；有效期内 Token 正常}
+  - {id: TP-PRODUCT-01-01, rule: R-PRODUCT-01, dimension: happy, text: 不带 Token 查询商品列表返回 200，默认 page=1、size=10，含 total/page/size/items}
+  - {id: TP-PRODUCT-01-02, rule: R-PRODUCT-01, dimension: boundary, text: size=1 和 100 成功且 items 数不超过 size；size=0、101、page=0 返回 422}
+  - {id: TP-PRODUCT-01-03, rule: R-PRODUCT-01, dimension: invalid_input, text: page/size 为非整数、status 为非 on_sale/off_sale 的值时返回 422}
+  - {id: TP-PRODUCT-02-01, rule: R-PRODUCT-02, dimension: happy, text: keyword 包含匹配、status 过滤生效，items 按 id 升序，total 等于过滤后记录数}
+  - {id: TP-PRODUCT-03-01, rule: R-PRODUCT-03, dimension: happy, text: 查询存在的商品返回 200，字段与数据库一致}
+  - {id: TP-PRODUCT-03-02, rule: R-PRODUCT-03, dimension: invalid_input, text: 不存在的 product_id 返回 404 Product not found；product_id=abc 返回 422}
+  - {id: TP-PRODUCT-04-01, rule: R-PRODUCT-04, dimension: happy, text: 管理员创建商品返回 201，status=on_sale}
+  - {id: TP-PRODUCT-04-02, rule: R-PRODUCT-04, dimension: side_effect, text: 商品数加 1，数据库 id/name/price/stock 与响应一致}
+  - {id: TP-PRODUCT-05-01, rule: R-PRODUCT-05, dimension: boundary, text: name 长度 1/100、price=0.01、stock=0 成功；name 空/101、price=0/负数、stock=-1 返回 422}
+  - {id: TP-PRODUCT-05-02, rule: R-PRODUCT-05, dimension: invalid_input, text: 缺 name/price/stock、price 为字符串、stock 为小数时返回 422}
+  - {id: TP-PRODUCT-05-03, rule: R-PRODUCT-05, dimension: side_effect, text: 创建校验失败后商品数不变}
+  - {id: TP-PRODUCT-06-01, rule: R-PRODUCT-06, dimension: happy, text: 管理员只提交 price 更新返回 200，响应 price 为新值}
+  - {id: TP-PRODUCT-06-02, rule: R-PRODUCT-06, dimension: side_effect, text: 只提交 price 后数据库 name/stock/status 保持原值；分别只提交 name、stock、status 同理}
+  - {id: TP-PRODUCT-07-01, rule: R-PRODUCT-07, dimension: invalid_input, text: 更新不存在商品返回 404；price=0、stock=-1、name 为空、status=deleted 返回 422}
+  - {id: TP-PRODUCT-07-02, rule: R-PRODUCT-07, dimension: side_effect, text: 更新失败后商品所有字段不变}
+  - {id: TP-PRODUCT-08-01, rule: R-PRODUCT-08, dimension: happy, text: 管理员下架在售商品返回 200，响应 status=off_sale}
+  - {id: TP-PRODUCT-08-02, rule: R-PRODUCT-08, dimension: side_effect, text: 下架后商品记录仍存在、商品总数不变，GET 详情和 status=off_sale 列表可查到}
+  - {id: TP-PRODUCT-09-01, rule: R-PRODUCT-09, dimension: side_effect, text: 有订单的商品下架后，订单详情和列表仍返回 200 且 product_id 不变}
+  - {id: TP-PERM-01-01, rule: R-PERM-01, dimension: permission, text: 新注册用户调用 POST /api/products 返回 403，证明注册不能得到管理员}
+  - {id: TP-PERM-02-01, rule: R-PERM-02, dimension: permission, text: 普通用户创建商品返回 403}
+  - {id: TP-PERM-02-02, rule: R-PERM-02, dimension: side_effect, text: 403 后商品数不变}
+  - {id: TP-PERM-03-01, rule: R-PERM-03, dimension: permission, text: 普通用户更新商品返回 403}
+  - {id: TP-PERM-03-02, rule: R-PERM-03, dimension: side_effect, text: 403 后商品字段不变}
+  - {id: TP-PERM-04-01, rule: R-PERM-04, dimension: permission, text: 普通用户下架商品返回 403}
+  - {id: TP-PERM-04-02, rule: R-PERM-04, dimension: side_effect, text: 403 后商品 status 仍为 on_sale}
+  - {id: TP-PERM-05-01, rule: R-PERM-05, dimension: permission, text: 普通用户创建优惠券返回 403}
+  - {id: TP-PERM-05-02, rule: R-PERM-05, dimension: side_effect, text: 403 后 coupons 数不变，该 code 不存在}
+  - {id: TP-PERM-06-01, rule: R-PERM-06, dimension: permission, text: 不带 Token 调用 POST/PUT/DELETE 商品和 POST 优惠券返回 401，数据库不变}
+  - {id: TP-ORDER-01-01, rule: R-ORDER-01, dimension: happy, text: 价格 99.0 库存 10 的商品购买 2 件返回 201，amount=198.0，status=created，user_id 为当前用户}
+  - {id: TP-ORDER-01-02, rule: R-ORDER-01, dimension: side_effect, text: 下单后库存减 2、余额不变、订单数加 1；价格 0.1 购买 3 件 amount=0.3（round 两位）}
+  - {id: TP-ORDER-02-01, rule: R-ORDER-02, dimension: boundary, text: quantity=1 和 100 成功；quantity=0 和 101 返回 422 且库存余额订单数不变}
+  - {id: TP-ORDER-02-02, rule: R-ORDER-02, dimension: invalid_input, text: 缺 product_id、product_id 为字符串、缺 quantity、quantity 为负数或小数时返回 422 且数据不变}
+  - {id: TP-ORDER-03-01, rule: R-ORDER-03, dimension: invalid_input, text: 不存在的 product_id 下单返回 404 Product not found}
+  - {id: TP-ORDER-04-01, rule: R-ORDER-04, dimension: state, text: 已下架商品下单返回 400 Product is not on sale}
+  - {id: TP-ORDER-05-01, rule: R-ORDER-05, dimension: boundary, text: 购买数量等于库存成功且库存变 0；库存+1 返回 400 Insufficient stock；库存 0 时购买 1 件返回 400}
+  - {id: TP-ORDER-07-01, rule: R-ORDER-07, dimension: state, text: 下架且库存不足返回 Product is not on sale；在售但库存不足返回 Insufficient stock（余额不参与下单校验）；不存在商品优先 404}
+  - {id: TP-ORDER-08-01, rule: R-ORDER-08, dimension: side_effect, text: 不存在、下架、库存不足三种失败后，库存、余额、订单总数与失败前一致}
+  - {id: TP-ORDER-09-01, rule: R-ORDER-09, dimension: permission, text: 不带 Token 调用全部 6 个订单接口返回 401 Invalid or missing credentials，数据不变}
+  - {id: TP-ORDER-10-01, rule: R-ORDER-10, dimension: happy, text: 用户创建 3 个订单后列表返回 3 条，按 id 升序，默认 page=1 size=10}
+  - {id: TP-ORDER-10-02, rule: R-ORDER-10, dimension: permission, text: 用户 A 的订单列表不包含用户 B 的订单，total 只计 A 的订单}
+  - {id: TP-ORDER-11-01, rule: R-ORDER-11, dimension: happy, text: 分别有 created/paid/cancelled 订单，按 status 过滤只返回对应状态，total 为过滤后数量}
+  - {id: TP-ORDER-11-02, rule: R-ORDER-11, dimension: invalid_input, text: status=unknown 返回 422}
+  - {id: TP-ORDER-12-01, rule: R-ORDER-12, dimension: boundary, text: size=1/100 和 page=1 成功；size=0/101、page=0 返回 422；page 超出总页数返回空 items 且 total 正确}
+  - {id: TP-ORDER-13-01, rule: R-ORDER-13, dimension: happy, text: 查询自己的订单返回 200，字段与数据库一致}
+  - {id: TP-ORDER-13-02, rule: R-ORDER-13, dimension: permission, text: 用户 B 查询用户 A 的订单返回 404 Order not found，与查询不存在订单的响应相同}
+  - {id: TP-ORDER-13-03, rule: R-ORDER-13, dimension: invalid_input, text: 不存在的 order_id 返回 404 Order not found；order_id=abc 返回 422}
+  - {id: TP-ORDER-14-01, rule: R-ORDER-14, dimension: happy, text: 支付 created 订单返回 200，响应 status=paid}
+  - {id: TP-ORDER-14-02, rule: R-ORDER-14, dimension: side_effect, text: 支付后数据库订单 status=paid，余额减少订单金额，库存不变}
+  - {id: TP-ORDER-15-01, rule: R-ORDER-15, dimension: state, text: 已支付订单再次支付返回 409}
+  - {id: TP-ORDER-15-02, rule: R-ORDER-15, dimension: side_effect, text: 重复支付后订单仍为 paid，库存、余额、库存流水数不变}
+  - {id: TP-ORDER-16-01, rule: R-ORDER-16, dimension: state, text: 已取消订单支付返回 409}
+  - {id: TP-ORDER-16-02, rule: R-ORDER-16, dimension: side_effect, text: 失败后订单仍为 cancelled，库存余额不变}
+  - {id: TP-ORDER-17-01, rule: R-ORDER-17, dimension: permission, text: 用户 B 支付用户 A 的订单返回 404，A 的订单仍为 created}
+  - {id: TP-ORDER-17-02, rule: R-ORDER-17, dimension: invalid_input, text: 支付不存在的订单返回 404；order_id=abc 返回 422}
+  - {id: TP-ORDER-18-01, rule: R-ORDER-18, dimension: happy, text: 取消 created 订单返回 200，响应 status=cancelled}
+  - {id: TP-ORDER-18-02, rule: R-ORDER-18, dimension: side_effect, text: 取消后库存加回 quantity、余额不变（未支付无退款），库存和余额与下单前的值相等}
+  - {id: TP-ORDER-19-01, rule: R-ORDER-19, dimension: state, text: 已支付订单取消返回 409；已取消订单再次取消返回 409}
+  - {id: TP-ORDER-19-02, rule: R-ORDER-19, dimension: side_effect, text: 409 后库存、余额、订单状态不变，不重复恢复}
+  - {id: TP-ORDER-20-01, rule: R-ORDER-20, dimension: permission, text: 用户 B 取消用户 A 的订单返回 404，A 的订单、库存、余额不变}
+  - {id: TP-ORDER-20-02, rule: R-ORDER-20, dimension: invalid_input, text: 取消不存在的订单返回 404；order_id=abc 返回 422}
+  - {id: TP-ORDER-21-01, rule: R-ORDER-21, dimension: boundary, text: 余额 1000 支付金额 1000 的订单成功且余额变 0；余额 1000 支付金额 1000.01 的订单返回 400 Insufficient balance}
+  - {id: TP-ORDER-21-02, rule: R-ORDER-21, dimension: side_effect, text: 余额不足的买家下单仍 201；支付返回 400 后订单保持 created，库存、余额、订单数不变}
+  - {id: TP-ORDER-22-01, rule: R-ORDER-22, dimension: concurrency, text: 库存 5 的商品 10 个买家并发各买 1 件，恰好 5 个 201，其余 400 Insufficient stock，最终库存 0，订单 5 条}
+  - {id: TP-ORDER-23-01, rule: R-ORDER-23, dimension: concurrency, text: 同一订单并发 10 次支付，恰好 1 个 200、9 个 409，余额只扣一次，库存不变}
+  - {id: TP-ORDER-24-01, rule: R-ORDER-24, dimension: concurrency, text: 同一买家余额 1000 的 5 笔 300 元订单并发支付，恰好 3 个 200、2 个 400，余额 100，paid 订单 3 条}
+  - {id: TP-ORDER-25-01, rule: R-ORDER-25, dimension: concurrency, text: 同一订单并发 10 次取消，恰好 1 个 200、9 个 409，库存只恢复一次，余额不变，order_cancelled 流水 1 条}
+  - {id: TP-ORDER-26-01, rule: R-ORDER-26, dimension: concurrency, text: 同一订单并发支付与取消，一个 200 一个 409；最终 paid 则库存保持扣减且余额扣款，最终 cancelled 则库存恢复且余额不变}
+  - {id: TP-DATA-01-01, rule: R-DATA-01, dimension: side_effect, text: 在带券下单事务中途注入故障（如创建订单失败），库存、券 used_count、订单数全部回滚}
+  - {id: TP-DATA-02-01, rule: R-DATA-02, dimension: side_effect, text: 在带券订单取消事务中途注入故障，库存、券 used_count、订单状态全部回滚}
+  - {id: TP-DATA-03-01, rule: R-DATA-03, dimension: side_effect, text: 下单后管理员改价，订单 amount 不变；支付时按原 amount 扣余额而不是新价格计算值}
+  - {id: TP-DATA-04-01, rule: R-DATA-04, dimension: permission, text: 用户 B 对 A 的订单执行查询、支付、取消均返回 404，B 的列表不含 A 的订单}
+  - {id: TP-DATA-05-01, rule: R-DATA-05, dimension: state, text: paid 与 cancelled 订单分别执行 pay 和 cancel 全部返回 409，库存、余额、状态、流水不变}
+  - {id: TP-DATA-06-01, rule: R-DATA-06, dimension: permission, text: 管理员对买家订单执行查询、支付、取消均返回 404，订单状态和买家余额不变}
+  - {id: TP-CART-01-01, rule: R-CART-01, dimension: permission, text: 不带 Token 或无效 Token 调用 5 个购物车接口均返回 401，cart_items 不变}
+  - {id: TP-CART-02-01, rule: R-CART-02, dimension: permission, text: A 和 B 各自添加不同商品，A 查询购物车只看到自己的项}
+  - {id: TP-CART-02-02, rule: R-CART-02, dimension: side_effect, text: A 修改、删除、清空购物车后，B 的 cart_items 不变}
+  - {id: TP-CART-03-01, rule: R-CART-03, dimension: happy, text: 添加在售商品 quantity=2 返回 201，响应 items 含该商品、quantity=2 和商品信息}
+  - {id: TP-CART-03-02, rule: R-CART-03, dimension: state, text: 添加已下架商品和不存在商品均失败（状态码见 Q-07），cart_items 不变}
+  - {id: TP-CART-03-03, rule: R-CART-03, dimension: side_effect, text: 添加后数据库 cart_items 新增一条 user_id/product_id/quantity 正确}
+  - {id: TP-CART-04-01, rule: R-CART-04, dimension: happy, text: 同一商品先加 2 再加 3，购物车只有一条 quantity=5}
+  - {id: TP-CART-04-02, rule: R-CART-04, dimension: concurrency, text: 同一用户并发 5 次添加同一商品各 1 件（库存 10），最终只有一条且 quantity=成功次数，不丢失更新}
+  - {id: TP-CART-05-01, rule: R-CART-05, dimension: boundary, text: 库存 5 时已有 3 再加 2 成功（=库存）；已有 3 再加 3 返回 400；库存 0 时添加 1 返回 400}
+  - {id: TP-CART-05-02, rule: R-CART-05, dimension: side_effect, text: 400 后 cart_items 数量与条数不变}
+  - {id: TP-CART-06-01, rule: R-CART-06, dimension: invalid_input, text: quantity=0、-1、101、字符串，缺 product_id 或 quantity 时返回 422，cart_items 不变}
+  - {id: TP-CART-07-01, rule: R-CART-07, dimension: happy, text: 已有 quantity=2 的项 PUT 为 4 返回 200，数量被设置为 4 而不是相加}
+  - {id: TP-CART-07-02, rule: R-CART-07, dimension: boundary, text: PUT 数量等于库存成功；超过库存的结果见 Q-06，需确认后断言}
+  - {id: TP-CART-08-01, rule: R-CART-08, dimension: invalid_input, text: 路径 product_id 与请求体不一致时失败（状态码见 Q-05）；修改购物车中不存在的项返回 404}
+  - {id: TP-CART-08-02, rule: R-CART-08, dimension: side_effect, text: 修改失败后 cart_items 不变}
+  - {id: TP-CART-09-01, rule: R-CART-09, dimension: happy, text: 删除存在的项返回 200 和剩余购物车，数据库该 cart_item 被删除}
+  - {id: TP-CART-09-02, rule: R-CART-09, dimension: invalid_input, text: 删除购物车中不存在的项返回 404；product_id=abc 返回 422}
+  - {id: TP-CART-09-03, rule: R-CART-09, dimension: permission, text: A 删除只存在于 B 购物车中的商品返回 404，B 的项不变}
+  - {id: TP-CART-10-01, rule: R-CART-10, dimension: happy, text: 有 2 项时清空返回 200 且 items 为空列表；空购物车清空也返回 200 且 items 为空列表}
+  - {id: TP-CART-10-02, rule: R-CART-10, dimension: side_effect, text: 清空后当前用户 cart_items 为 0，其他用户不变，商品库存不变}
+  - {id: TP-COUPON-01-01, rule: R-COUPON-01, dimension: happy, text: 管理员创建 code=SAVE10、discount_percent=10、max_uses=5 返回 201，响应字段一致，used_count=0（初始 status 见 Q-09）}
+  - {id: TP-COUPON-01-02, rule: R-COUPON-01, dimension: side_effect, text: coupons 新增一条，字段与响应一致}
+  - {id: TP-COUPON-02-01, rule: R-COUPON-02, dimension: boundary, text: discount_percent=0.01 和 100 成功；0、-1、100.01 返回 422}
+  - {id: TP-COUPON-02-02, rule: R-COUPON-02, dimension: invalid_input, text: code 含小写字母、空格、点号或中文，缺 code/discount_percent/max_uses 时返回 422}
+  - {id: TP-COUPON-02-03, rule: R-COUPON-02, dimension: side_effect, text: 422 后 coupons 数不变}
+  - {id: TP-COUPON-03-01, rule: R-COUPON-03, dimension: state, text: 已存在 code 再次创建返回 409}
+  - {id: TP-COUPON-03-02, rule: R-COUPON-03, dimension: side_effect, text: 409 后该 code 仍只有一条，原券字段不变}
+  - {id: TP-COUPON-03-03, rule: R-COUPON-03, dimension: concurrency, text: 并发 5 次创建同一 code，只有 1 个 201，其余 409，数据库一条}
+  - {id: TP-COUPON-04-01, rule: R-COUPON-04, dimension: happy, text: 创建的 active 券出现在 GET /api/coupons 结果中，字段与数据库一致}
+  - {id: TP-COUPON-05-01, rule: R-COUPON-05, dimension: happy, text: 价格 100 购买 2 件使用 10% 券下单返回 201，amount=180.0，coupon_code=该券}
+  - {id: TP-COUPON-05-02, rule: R-COUPON-05, dimension: side_effect, text: 下单时余额不变、库存减 2、订单数加 1、券 used_count 加 1；支付该订单后余额减 180.0}
+  - {id: TP-COUPON-06-01, rule: R-COUPON-06, dimension: boundary, text: 100% 券 amount=0.0 且支付后余额不变；价格 9.99 买 3 件 10% 券 amount=26.97（26.973 取两位），支付后余额减 26.97}
+  - {id: TP-COUPON-07-01, rule: R-COUPON-07, dimension: state, text: max_uses=1 的券使用一次后再次下单返回 400}
+  - {id: TP-COUPON-07-02, rule: R-COUPON-07, dimension: side_effect, text: 400 后库存、余额、订单数、券 used_count 和 status 均不变}
+  - {id: TP-COUPON-08-01, rule: R-COUPON-08, dimension: state, text: max_uses=2 的券第 1 次使用后仍为 active、used_count=1；第 2 次后 status=exhausted、used_count=2}
+  - {id: TP-COUPON-09-01, rule: R-COUPON-09, dimension: state, text: 用 max_uses=1 的券下单使其 exhausted，取消该订单后 status 恢复为 active}
+  - {id: TP-COUPON-09-02, rule: R-COUPON-09, dimension: side_effect, text: 取消后 used_count 减 1，余额不变（未支付无退款），券可再次用于下单}
+  - {id: TP-COUPON-10-01, rule: R-COUPON-10, dimension: side_effect, text: 带有效券下单但库存不足、商品下架时返回 400，券 used_count 和 status 不变}
+  - {id: TP-COUPON-11-01, rule: R-COUPON-11, dimension: concurrency, text: max_uses=1 的券 5 个买家并发带券下单，恰好 1 个 201、4 个 400，used_count=1，带券订单 1 条，库存只减 1}
+  - {id: TP-INV-01-01, rule: R-INV-01, dimension: happy, text: 下单 3 件后查询流水，含一条 quantity_change=-3、reason=order_created}
+  - {id: TP-INV-01-02, rule: R-INV-01, dimension: side_effect, text: 每次成功下单库存流水数加 1，流水 product_id 正确}
+  - {id: TP-INV-02-01, rule: R-INV-02, dimension: happy, text: 取消 3 件的订单后流水含 quantity_change=+3、reason=order_cancelled、reference_id=订单 ID}
+  - {id: TP-INV-02-02, rule: R-INV-02, dimension: side_effect, text: 取消后流水数加 1，该商品流水 quantity_change 之和等于 0}
+  - {id: TP-INV-03-01, rule: R-INV-03, dimension: side_effect, text: 库存不足/下架/券耗尽的下单、重复支付、取消已支付或已取消订单后，流水数不变}
+  - {id: TP-INV-04-01, rule: R-INV-04, dimension: happy, text: 两个商品各自下单，查询商品 A 流水只返回 product_id=A 的记录}
+  - {id: TP-INV-04-02, rule: R-INV-04, dimension: permission, text: 不带 Token 查询库存流水返回 401（普通用户是否可查见 Q-12）}
+  - {id: TP-INV-04-03, rule: R-INV-04, dimension: invalid_input, text: 不存在商品返回 404；product_id=abc 返回 422}
+  - {id: TP-SEC-01-01, rule: R-SEC-01, dimension: permission, text: aud 不是 mini-shop、缺 aud、缺 exp、用其他密钥签名的 JWT 访问 /api/auth/me 返回 401}
+  - {id: TP-SEC-02-01, rule: R-SEC-02, dimension: side_effect, text: password_hash 为 PBKDF2-SHA256 格式并含盐；两个用户使用相同密码时哈希不同}
+  - {id: TP-SEC-03-01, rule: R-SEC-03, dimension: happy, text: 注册、登录、me、订单、购物车响应中均不含 password 和 password_hash 字段或值}
+  - {id: TP-SEC-04-01, rule: R-SEC-04, dimension: side_effect, text: 检查测试报告和证据文件中不含 Token、明文密码、数据库连接串}
+  - {id: TP-SEC-05-01, rule: R-SEC-05, dimension: permission, text: 未配置 APP_SECRET_KEY 时重启服务，重启前签发的 Token 返回 401；代码中无硬编码密钥}
+  - {id: TP-TRACE-01-01, rule: R-TRACE-01, dimension: happy, text: GET /openapi.json 返回 200，与 contracts/mini_shop.openapi.json 比较无破坏性差异}
+  - {id: TP-TRACE-02-01, rule: R-TRACE-02, dimension: happy, text: 关键业务用例缺少数据库快照时报告结论为 INCONCLUSIVE 而非 PASS}
+  - {id: TP-TRACE-03-01, rule: R-TRACE-03, dimension: happy, text: "一次测试运行中每个请求都带 request_id，所有 request_id 互不相同，且报告证据中的每条 HTTP 记录都有 request_id"}
+
+# ④ 测试用例
+cases:
+  - id: TC-META-001
+    test_points: [TP-META-01-01]
+    title: 健康检查
+    steps: ["不带 Authorization 调用 GET /health"]
+    expected: "200；body.status == ok"
+    testable: api
+  - id: TC-META-002
+    test_points: [TP-META-02-01]
+    title: 时间字段为 ISO 8601
+    steps: ["随机用户注册", "管理员创建商品", "买家下单 1 件", "GET /api/orders/{id} 与 GET /api/products/{id}"]
+    expected: "注册、商品、下单、订单详情响应的 created_at 均为字符串，且能被 datetime.fromisoformat 解析（Z 后缀按 +00:00 处理）"
+    testable: api
+  - id: TC-AUTH-001
+    test_points: [TP-AUTH-01-01, TP-AUTH-01-02]
+    title: 正常注册
+    steps: ["记录 users 表行数", "用随机 8 位用户名和密码 Test123456 注册"]
+    expected: "201；响应含 id、username 等于请求值、balance == 1000.0、created_at 为 ISO 8601；users 行数 +1，该行 balance == 1000.00"
+    testable: api
+  - id: TC-AUTH-002
+    test_points: [TP-AUTH-02-01, TP-AUTH-02-03]
+    title: 注册用户名与密码长度边界
+    steps: ["分别注册 username 长度 3、20（密码 6、32 位）", "分别注册 username 长度 2、21，password 长度 5、33", "每次记录 users 行数"]
+    expected: "长度 3/20 与 6/32 返回 201；长度 2/21 与 5/33 返回 422，users 行数不变"
+    testable: api
+  - id: TC-AUTH-003
+    test_points: [TP-AUTH-02-02, TP-AUTH-02-03]
+    title: 注册请求体缺字段或类型错误
+    steps: ["分别发送缺 username、缺 password、username 为整数、空 body 的注册请求"]
+    expected: "均返回 422；users 行数不变"
+    testable: api
+  - id: TC-AUTH-004
+    test_points: [TP-AUTH-03-01, TP-AUTH-03-02]
+    title: 重复用户名注册
+    steps: ["注册用户 U（密码 P1）", "记录 U 的数据库行与 users 行数", "用相同用户名、密码 P2 再次注册"]
+    expected: "第二次返回 409，detail == Username already exists；users 行数不变，U 的 password_hash 与 balance 不变，P1 仍可登录"
+    testable: api
+  - id: TC-AUTH-005
+    test_points: [TP-AUTH-03-03]
+    title: 并发同名注册
+    steps: ["用 ThreadPoolExecutor 并发 10 个相同用户名的注册请求"]
+    expected: "恰好 1 个 201，其余 9 个 409；数据库该用户名只有 1 行"
+    testable: api
+  - id: TC-AUTH-006
+    test_points: [TP-AUTH-04-01]
+    title: 密码不以明文保存或返回
+    steps: ["注册用户，密码 Test123456", "读取数据库 users.password_hash", "检查注册响应体"]
+    expected: "password_hash 非空且不等于、不包含 Test123456；响应无 password、password_hash 键，响应文本不含明文密码"
+    testable: api
+  - id: TC-AUTH-007
+    test_points: [TP-AUTH-05-01, TP-AUTH-05-02]
+    title: 正常登录
+    steps: ["注册用户并记录余额、订单数、商品数", "用正确用户名密码登录", "用返回的 token 调 GET /api/auth/me"]
+    expected: "登录 200，access_token 非空，token_type == bearer；me 返回 200 且 username 一致；余额、订单数、商品数不变"
+    testable: api
+  - id: TC-AUTH-008
+    test_points: [TP-AUTH-06-01]
+    title: 错误密码与不存在用户返回相同错误
+    steps: ["已注册用户用错误密码登录", "用不存在的随机用户名登录"]
+    expected: "两者均为 401，detail == Incorrect username or password，两个响应体完全相同"
+    testable: api
+  - id: TC-AUTH-009
+    test_points: [TP-AUTH-07-01]
+    title: 登录请求体校验
+    steps: ["分别发送缺 username、缺 password、空 body、password 为整数的登录请求"]
+    expected: "均返回 422"
+    testable: api
+  - id: TC-AUTH-010
+    test_points: [TP-AUTH-08-01]
+    title: 查询当前用户
+    steps: ["注册并登录", "GET /api/auth/me"]
+    expected: "200；id、username、balance、created_at 与数据库一致；响应不含 password_hash"
+    testable: api
+  - id: TC-AUTH-011
+    test_points: [TP-AUTH-09-01]
+    title: 无效 Token 访问 me
+    steps: ["分别以无 Authorization、Authorization 为 Token xxx、Bearer 随机串、篡改有效 JWT 签名段调用 GET /api/auth/me"]
+    expected: "均 401；响应头 WWW-Authenticate == Bearer；detail == Invalid or missing credentials"
+    testable: api
+  - id: TC-AUTH-012
+    test_points: [TP-AUTH-09-01]
+    title: Token 对应用户不存在
+    steps: ["注册用户并登录得到 token", "从数据库删除该用户", "用该 token 调 GET /api/auth/me"]
+    expected: "401；WWW-Authenticate == Bearer；detail == Invalid or missing credentials"
+    testable: api
+  - id: TC-AUTH-013
+    test_points: [TP-AUTH-10-01]
+    title: Token 过期
+    steps: ["在 Token 有效期配置为 1 分钟的环境登录", "等待超过 1 分钟后调用 GET /api/auth/me"]
+    expected: "过期前 200，过期后 401 且 detail == Invalid or missing credentials"
+    testable: manual
+    reason: 需要修改服务的 Token 有效期配置或等待 60 分钟，测试环境如何提供见 Q-17
+  - id: TC-PRODUCT-001
+    test_points: [TP-PRODUCT-01-01]
+    title: 商品列表默认分页
+    steps: ["管理员创建 1 个商品", "不带 Token GET /api/products"]
+    expected: "200；page == 1，size == 10，len(items) <= 10，含 total 字段"
+    testable: api
+  - id: TC-PRODUCT-002
+    test_points: [TP-PRODUCT-01-02]
+    title: 商品列表分页边界
+    steps: ["请求 size=1、size=100、page=1", "请求 size=0、size=101、page=0"]
+    expected: "前三个 200 且 len(items) <= size；后三个 422"
+    testable: api
+  - id: TC-PRODUCT-003
+    test_points: [TP-PRODUCT-01-03]
+    title: 商品列表非法参数
+    steps: ["请求 page=abc、size=1.5、status=deleted"]
+    expected: "均返回 422"
+    testable: api
+  - id: TC-PRODUCT-004
+    test_points: [TP-PRODUCT-02-01]
+    title: 商品列表关键词与状态过滤
+    steps: ["管理员创建含唯一前缀 K 的 3 个商品，下架其中 1 个", "GET /api/products?keyword=K", "GET /api/products?keyword=K&status=on_sale", "GET /api/products?keyword=K&status=off_sale"]
+    expected: "keyword 查询 total == 3；on_sale total == 2，off_sale total == 1；items 名称都包含 K、status 与过滤值一致、id 升序"
+    testable: api
+  - id: TC-PRODUCT-005
+    test_points: [TP-PRODUCT-03-01]
+    title: 查询商品详情
+    steps: ["管理员创建商品", "不带 Token GET /api/products/{id}"]
+    expected: "200；id、name、price、stock、status 与数据库一致"
+    testable: api
+  - id: TC-PRODUCT-006
+    test_points: [TP-PRODUCT-03-02]
+    title: 查询不存在或非法商品 ID
+    steps: ["GET /api/products/{数据库最大 id + 1000}", "GET /api/products/abc"]
+    expected: "前者 404，detail == Product not found；后者 422"
+    testable: api
+  - id: TC-PRODUCT-007
+    test_points: [TP-PRODUCT-04-01, TP-PRODUCT-04-02]
+    title: 管理员创建商品
+    steps: ["记录 products 行数", "管理员 POST /api/products name=Keyboard price=99.0 stock=10"]
+    expected: "201；status == on_sale；products 行数 +1；数据库该行 name/price/stock 与响应一致"
+    testable: api
+  - id: TC-PRODUCT-008
+    test_points: [TP-PRODUCT-05-01, TP-PRODUCT-05-03]
+    title: 创建商品字段边界
+    steps: ["管理员分别创建 name 长度 1 和 100、price=0.01、stock=0 的商品", "分别创建 name 为空串、长度 101、price=0、price=-1、stock=-1 的商品", "每次记录 products 行数"]
+    expected: "合法边界均 201；非法值均 422 且 products 行数不变"
+    testable: api
+  - id: TC-PRODUCT-009
+    test_points: [TP-PRODUCT-05-02, TP-PRODUCT-05-03]
+    title: 创建商品缺字段或类型错误
+    steps: ["管理员分别发送缺 name、缺 price、缺 stock、price=abc、stock=1.5 的请求"]
+    expected: "均 422；products 行数不变"
+    testable: api
+  - id: TC-PRODUCT-010
+    test_points: [TP-PRODUCT-06-01, TP-PRODUCT-06-02]
+    title: 部分字段更新
+    steps: ["管理员创建商品 name=A price=10 stock=5", "PUT 只提交 price=20", "PUT 只提交 stock=8", "PUT 只提交 name=B"]
+    expected: "每次 200；每次只有提交的字段变化，其余字段与上一次数据库值相同；最终 name=B price=20 stock=8 status=on_sale"
+    testable: api
+  - id: TC-PRODUCT-011
+    test_points: [TP-PRODUCT-07-01, TP-PRODUCT-07-02]
+    title: 更新不存在商品或非法字段
+    steps: ["管理员 PUT 不存在的 product_id", "对已有商品分别 PUT price=0、stock=-1、name 为空串、status=deleted"]
+    expected: "不存在返回 404；非法字段均 422；已有商品数据库各字段不变"
+    testable: api
+  - id: TC-PRODUCT-012
+    test_points: [TP-PRODUCT-08-01, TP-PRODUCT-08-02]
+    title: 管理员下架商品
+    steps: ["管理员创建商品并记录 products 行数", "DELETE /api/products/{id}", "GET 详情和 status=off_sale 列表"]
+    expected: "DELETE 200 且 status == off_sale；products 行数不变，该行仍存在且 status=off_sale；详情 200，off_sale 列表包含该商品"
+    testable: api
+  - id: TC-PRODUCT-013
+    test_points: [TP-PRODUCT-09-01]
+    title: 下架后历史订单仍有效
+    steps: ["买家对商品下单", "管理员下架该商品", "买家 GET 订单详情和订单列表"]
+    expected: "均 200；订单 product_id、amount、status 不变"
+    testable: api
+  - id: TC-PERM-001
+    test_points: [TP-PERM-01-01]
+    title: 注册用户不是管理员
+    steps: ["注册新用户并登录", "调用 POST /api/products"]
+    expected: "403；products 行数不变"
+    testable: api
+  - id: TC-PERM-002
+    test_points: [TP-PERM-02-01, TP-PERM-02-02]
+    title: 普通用户创建商品
+    steps: ["记录 products 行数", "普通用户 POST /api/products 合法请求体"]
+    expected: "403；products 行数不变"
+    testable: api
+  - id: TC-PERM-003
+    test_points: [TP-PERM-03-01, TP-PERM-03-02]
+    title: 普通用户更新商品
+    steps: ["管理员创建商品", "普通用户 PUT price=1、stock=999"]
+    expected: "403；数据库 name/price/stock/status 不变"
+    testable: api
+  - id: TC-PERM-004
+    test_points: [TP-PERM-04-01, TP-PERM-04-02]
+    title: 普通用户下架商品
+    steps: ["管理员创建商品", "普通用户 DELETE /api/products/{id}"]
+    expected: "403；数据库 status 仍为 on_sale"
+    testable: api
+  - id: TC-PERM-005
+    test_points: [TP-PERM-05-01, TP-PERM-05-02]
+    title: 普通用户创建优惠券
+    steps: ["记录 coupons 行数", "普通用户 POST /api/coupons code=随机大写 discount_percent=10 max_uses=1"]
+    expected: "403；coupons 行数不变，该 code 不存在"
+    testable: api
+  - id: TC-PERM-006
+    test_points: [TP-PERM-06-01]
+    title: 未认证调用管理接口
+    steps: ["不带 Token 分别调用 POST /api/products、PUT /api/products/{id}、DELETE /api/products/{id}、POST /api/coupons"]
+    expected: "均 401；products 与 coupons 数据不变"
+    testable: api
+  - id: TC-ORDER-001
+    test_points: [TP-ORDER-01-01, TP-ORDER-01-02, TP-INV-01-02]
+    title: 正常下单
+    steps: ["管理员创建 price=99.0 stock=10 的商品", "记录买家余额、库存、订单数", "买家 POST /api/orders quantity=2"]
+    expected: "201；amount == 198.0，status == created，user_id == 买家 id，quantity == 2；库存 10→8，余额不变，订单数 +1；新增一条 order_created 库存流水，quantity_change == -2，reference_id == 订单 id"
+    testable: api
+  - id: TC-ORDER-002
+    test_points: [TP-ORDER-01-02]
+    title: 订单金额按两位小数取整
+    steps: ["管理员创建 price=0.1 stock=10 的商品", "买家购买 3 件"]
+    expected: "201；amount == 0.3（误差小于 0.005）；下单后余额不变"
+    testable: api
+  - id: TC-ORDER-003
+    test_points: [TP-ORDER-02-01]
+    title: 购买数量边界
+    steps: ["管理员创建 price=1 stock=200 的商品", "买家分别购买 1 件、100 件", "买家分别购买 0 件、101 件，记录前后库存、余额、订单数"]
+    expected: "1 和 100 返回 201；0 和 101 返回 422，库存、余额、订单数不变"
+    testable: api
+  - id: TC-ORDER-004
+    test_points: [TP-ORDER-02-02]
+    title: 下单请求体非法
+    steps: ["分别发送缺 product_id、product_id=abc、缺 quantity、quantity=-1、quantity=1.5 的下单请求"]
+    expected: "均 422；库存、余额、订单数不变"
+    testable: api
+  - id: TC-ORDER-005
+    test_points: [TP-ORDER-03-01, TP-ORDER-08-01]
+    title: 商品不存在下单
+    steps: ["记录买家余额和订单数", "对不存在的 product_id 下单"]
+    expected: "404，detail == Product not found；余额、订单总数不变"
+    testable: api
+  - id: TC-ORDER-006
+    test_points: [TP-ORDER-04-01, TP-ORDER-08-01]
+    title: 下架商品下单
+    steps: ["管理员创建商品并下架", "记录库存、余额、订单数", "买家下单 1 件"]
+    expected: "400，detail == Product is not on sale；库存、余额、订单数不变"
+    testable: api
+  - id: TC-ORDER-007
+    test_points: [TP-ORDER-05-01, TP-ORDER-08-01]
+    title: 库存边界
+    steps: ["管理员创建 price=1 stock=3 的商品", "买家 A 购买 4 件", "买家 A 购买 3 件", "买家 B 购买 1 件"]
+    expected: "购买 4 件 400 Insufficient stock 且库存、余额、订单数不变；购买 3 件 201 且库存变 0；库存 0 时购买 1 件 400 Insufficient stock 且数据不变"
+    testable: api
+  - id: TC-ORDER-008
+    test_points: [TP-ORDER-22-01]
+    title: 并发下单防超卖
+    steps: ["管理员创建 price=1 stock=5 的商品", "10 个不同买家用 ThreadPoolExecutor 同时各买 1 件"]
+    expected: "恰好 5 个 201，其余 5 个 400 Insufficient stock；最终库存 == 0；该商品订单 5 条"
+    testable: api
+  - id: TC-ORDER-009
+    test_points: [TP-ORDER-21-01, TP-ORDER-21-02]
+    title: 支付时余额边界
+    steps: ["管理员创建 price=500 stock=10 的商品", "新买家 A（余额 1000）购买 2 件并支付", "管理员创建 price=1000.01 stock=10 的商品，新买家 B（余额 1000）购买 1 件", "记录 B 的余额、库存、订单数后支付该订单"]
+    expected: "A 支付 200 且余额变 0；B 下单 201；B 支付返回 400 Insufficient balance，订单保持 created，库存、余额、订单数不变"
+    testable: api
+  - id: TC-ORDER-010
+    test_points: [TP-ORDER-24-01]
+    title: 同一买家并发支付多笔订单余额不为负
+    steps: ["管理员创建 price=300 stock=100 的商品", "同一新买家（余额 1000）先下 5 笔各 1 件的订单", "用 ThreadPoolExecutor 同时支付这 5 笔订单"]
+    expected: "恰好 3 个 200、2 个 400；余额 == 100；该买家 paid 订单 3 条"
+    testable: api
+  - id: TC-ORDER-011
+    test_points: [TP-ORDER-07-01]
+    title: 前置条件检查顺序
+    steps: ["管理员创建 stock=1 的商品并下架，买家购买 2 件", "创建 price=1000 stock=1 的在售商品，余额 1000 的买家购买 2 件", "对不存在商品下单"]
+    expected: "第一种 400 Product is not on sale；第二种 400 Insufficient stock；第三种 404 Product not found；全部数据不变"
+    testable: api
+  - id: TC-ORDER-012
+    test_points: [TP-ORDER-09-01]
+    title: 订单接口未认证
+    steps: ["买家创建一个订单", "不带 Token 调用 POST /api/orders、GET /api/orders、GET /api/orders/{id}、POST pay、POST cancel"]
+    expected: "均 401，detail == Invalid or missing credentials；订单状态、库存、余额不变"
+    testable: api
+  - id: TC-ORDER-013
+    test_points: [TP-ORDER-10-01]
+    title: 订单列表默认排序
+    steps: ["新买家创建 3 个订单", "GET /api/orders"]
+    expected: "200；total == 3，page == 1，size == 10，items id 升序且都属于该买家"
+    testable: api
+  - id: TC-ORDER-014
+    test_points: [TP-ORDER-10-02]
+    title: 订单列表用户隔离
+    steps: ["买家 A 创建 2 个订单，买家 B 创建 1 个", "A 和 B 分别 GET /api/orders"]
+    expected: "A total == 2 且所有 user_id == A；B total == 1 且不含 A 的订单 id"
+    testable: api
+  - id: TC-ORDER-015
+    test_points: [TP-ORDER-11-01]
+    title: 订单状态过滤
+    steps: ["新买家创建 3 个订单，支付 1 个、取消 1 个", "分别按 status=created、paid、cancelled 查询"]
+    expected: "每个查询 total == 1，items 的 status 等于过滤值"
+    testable: api
+  - id: TC-ORDER-016
+    test_points: [TP-ORDER-11-02]
+    title: 订单状态过滤非法值
+    steps: ["GET /api/orders?status=unknown"]
+    expected: "422"
+    testable: api
+  - id: TC-ORDER-017
+    test_points: [TP-ORDER-12-01]
+    title: 订单列表分页边界
+    steps: ["新买家创建 3 个订单", "请求 size=1、size=100、page=1", "请求 size=0、size=101、page=0", "请求 page=10 size=10"]
+    expected: "size=1 返回 1 条 total == 3；size=100 返回 3 条；非法值 422；page=10 返回空 items 且 total == 3"
+    testable: api
+  - id: TC-ORDER-018
+    test_points: [TP-ORDER-13-01]
+    title: 查询自己的订单详情
+    steps: ["买家下单", "GET /api/orders/{id}"]
+    expected: "200；id、user_id、product_id、quantity、amount、status 与数据库一致"
+    testable: api
+  - id: TC-ORDER-019
+    test_points: [TP-ORDER-13-02]
+    title: 跨用户查询订单详情
+    steps: ["买家 A 下单", "买家 B GET A 的订单", "买家 B GET 不存在的订单"]
+    expected: "两次均 404，detail == Order not found，响应体相同；响应不含 A 的订单数据"
+    testable: api
+  - id: TC-ORDER-020
+    test_points: [TP-ORDER-13-03]
+    title: 订单详情非法 ID
+    steps: ["GET /api/orders/{最大 id + 1000}", "GET /api/orders/abc"]
+    expected: "前者 404 Order not found；后者 422"
+    testable: api
+  - id: TC-ORDER-021
+    test_points: [TP-ORDER-14-01, TP-ORDER-14-02]
+    title: 正常支付
+    steps: ["买家下单，记录库存与余额", "POST /api/orders/{id}/pay"]
+    expected: "200，status == paid；数据库订单 status=paid；余额减少订单金额（== 支付前余额 - amount）；库存不变"
+    testable: api
+  - id: TC-ORDER-022
+    test_points: [TP-ORDER-15-01, TP-ORDER-15-02]
+    title: 重复支付
+    steps: ["买家下单并支付", "记录库存、余额、库存流水数", "再次支付"]
+    expected: "409；订单仍为 paid；库存、余额、库存流水数不变"
+    testable: api
+  - id: TC-ORDER-023
+    test_points: [TP-ORDER-23-01]
+    title: 并发重复支付
+    steps: ["买家下单，记录余额和库存", "并发 10 次 POST pay"]
+    expected: "恰好 1 个 200、9 个 409；订单为 paid；余额只扣一次（== 支付前余额 - amount）；库存不变"
+    testable: api
+  - id: TC-ORDER-024
+    test_points: [TP-ORDER-16-01, TP-ORDER-16-02]
+    title: 支付已取消订单
+    steps: ["买家下单并取消，记录库存余额", "POST pay"]
+    expected: "409；订单仍为 cancelled；库存、余额不变"
+    testable: api
+  - id: TC-ORDER-025
+    test_points: [TP-ORDER-17-01]
+    title: 支付他人订单
+    steps: ["买家 A 下单", "买家 B 支付 A 的订单"]
+    expected: "404；A 的订单仍为 created；A 和 B 的余额不变"
+    testable: api
+  - id: TC-ORDER-026
+    test_points: [TP-ORDER-17-02]
+    title: 支付不存在订单
+    steps: ["POST /api/orders/{最大 id + 1000}/pay", "POST /api/orders/abc/pay"]
+    expected: "前者 404；后者 422"
+    testable: api
+  - id: TC-ORDER-027
+    test_points: [TP-ORDER-18-01, TP-ORDER-18-02]
+    title: 正常取消恢复库存且余额不变
+    steps: ["记录下单前库存 S 和余额 B", "买家下单 2 件", "POST cancel"]
+    expected: "200，status == cancelled；数据库订单 status=cancelled；库存 == S（已恢复）；余额 == B（未支付无退款）"
+    testable: api
+  - id: TC-ORDER-028
+    test_points: [TP-ORDER-26-01]
+    title: 支付与取消并发
+    steps: ["买家下单，记录下单前库存 S 和余额 B", "同时发送 pay 和 cancel"]
+    expected: "恰好一个 200、一个 409；若最终 paid 则库存 == S - quantity 且余额 == B - amount；若最终 cancelled 则库存 == S 且余额 == B"
+    testable: api
+  - id: TC-ORDER-029
+    test_points: [TP-ORDER-19-01, TP-ORDER-19-02]
+    title: 取消已支付和已取消订单
+    steps: ["订单 1 下单并支付，订单 2 下单并取消，记录库存余额", "分别对两单 POST cancel"]
+    expected: "均 409；订单 1 状态仍 paid，订单 2 状态仍 cancelled；库存、余额不变"
+    testable: api
+  - id: TC-ORDER-030
+    test_points: [TP-ORDER-25-01]
+    title: 并发重复取消
+    steps: ["记录下单前库存 S 和余额 B", "买家下单", "并发 10 次 POST cancel"]
+    expected: "恰好 1 个 200、9 个 409；库存 == S（只恢复一次）；余额 == B（不变）；order_cancelled 流水只有 1 条"
+    testable: api
+  - id: TC-ORDER-031
+    test_points: [TP-ORDER-20-01]
+    title: 取消他人订单
+    steps: ["买家 A 下单，记录库存与 A 余额", "买家 B 取消 A 的订单"]
+    expected: "404；A 的订单仍 created；库存和 A 的余额不变"
+    testable: api
+  - id: TC-ORDER-032
+    test_points: [TP-ORDER-20-02]
+    title: 取消不存在订单
+    steps: ["POST /api/orders/{最大 id + 1000}/cancel", "POST /api/orders/abc/cancel"]
+    expected: "前者 404；后者 422"
+    testable: api
+  - id: TC-ORDER-033
+    test_points: [TP-DATA-06-01]
+    title: 管理员操作他人订单
+    steps: ["买家下单，记录订单状态和买家余额", "管理员对该订单 GET /api/orders/{id}、POST /api/orders/{id}/pay、POST /api/orders/{id}/cancel"]
+    expected: "GET、pay、cancel 均 404；订单状态仍为 created；买家余额不变"
+    testable: api
+  - id: TC-DATA-001
+    test_points: [TP-DATA-01-01]
+    title: 下单事务原子性
+    steps: ["在测试环境对创建订单步骤注入数据库异常", "买家带有效券下单"]
+    expected: "请求失败；库存、券 used_count、订单数与下单前一致"
+    testable: manual
+    reason: 需要在服务内部注入故障，契约中没有接口能制造部分失败
+  - id: TC-DATA-002
+    test_points: [TP-DATA-02-01]
+    title: 取消事务原子性
+    steps: ["在测试环境对更新订单状态步骤注入数据库异常", "买家取消带券订单"]
+    expected: "请求失败；库存、券 used_count、订单状态与取消前一致"
+    testable: manual
+    reason: 需要在服务内部注入故障，契约中没有接口能制造部分失败
+  - id: TC-DATA-003
+    test_points: [TP-DATA-03-01]
+    title: 改价不影响历史订单金额
+    steps: ["商品 price=100，买家买 2 件", "管理员改价为 150", "查询订单，记录余额 B 后支付该订单"]
+    expected: "订单 amount 仍为 200.0；支付 200 后余额 == B - 200.0（而非 B - 300.0）"
+    testable: api
+  - id: TC-DATA-004
+    test_points: [TP-DATA-04-01]
+    title: 订单资源隔离
+    steps: ["买家 A 下单", "买家 B 对该订单 GET、pay、cancel，并 GET /api/orders"]
+    expected: "GET/pay/cancel 均 404；B 的列表不含该订单；A 的订单仍 created"
+    testable: api
+  - id: TC-DATA-005
+    test_points: [TP-DATA-05-01]
+    title: 终态订单非法流转
+    steps: ["准备 paid 订单与 cancelled 订单，记录库存、余额、库存流水数", "对两单分别 pay 和 cancel"]
+    expected: "4 次请求均 409；订单状态、库存、余额、库存流水数不变"
+    testable: api
+  - id: TC-CART-001
+    test_points: [TP-CART-01-01]
+    title: 购物车接口未认证
+    steps: ["不带 Token 及使用随机 Bearer 串分别调用 GET/DELETE /api/cart、POST /api/cart/items、PUT 和 DELETE /api/cart/items/{product_id}"]
+    expected: "均 401；cart_items 表不变"
+    testable: api
+  - id: TC-CART-002
+    test_points: [TP-CART-02-01]
+    title: 购物车按用户隔离查询
+    steps: ["A 添加商品 P1，B 添加商品 P2", "A 和 B 分别 GET /api/cart"]
+    expected: "均 200；A 只看到 P1，B 只看到 P2"
+    testable: api
+  - id: TC-CART-003
+    test_points: [TP-CART-02-02]
+    title: 修改自己购物车不影响他人
+    steps: ["A 和 B 都添加商品 P1 数量 2", "A 将 P1 改为 3，然后删除 P1，再清空购物车"]
+    expected: "A 的操作均成功；B 的 cart_items 中 P1 数量始终为 2"
+    testable: api
+  - id: TC-CART-004
+    test_points: [TP-CART-03-01, TP-CART-03-03]
+    title: 添加商品到购物车
+    steps: ["管理员创建 stock=10 的商品", "买家 POST /api/cart/items quantity=2"]
+    expected: "201；items 含该 product_id，quantity == 2，product 信息与商品一致；cart_items 新增一行 user_id/product_id/quantity 正确"
+    testable: api
+  - id: TC-CART-005
+    test_points: [TP-CART-03-02]
+    title: 添加下架或不存在商品
+    steps: ["管理员创建商品并下架", "买家添加该商品", "买家添加不存在的 product_id"]
+    expected: "两次均失败（状态码与 detail 待 Q-07 确认）；cart_items 不变"
+    testable: api
+  - id: TC-CART-006
+    test_points: [TP-CART-04-01]
+    title: 重复添加合并数量
+    steps: ["买家添加商品 quantity=2", "再次添加同一商品 quantity=3"]
+    expected: "第二次 201；购物车该商品只有一条且 quantity == 5"
+    testable: api
+  - id: TC-CART-007
+    test_points: [TP-CART-04-02]
+    title: 并发添加同一商品
+    steps: ["管理员创建 stock=10 的商品", "同一买家并发 5 次添加 quantity=1"]
+    expected: "cart_items 中该商品只有 1 行；quantity == 成功请求数；成功请求数 == 5"
+    testable: api
+  - id: TC-CART-008
+    test_points: [TP-CART-05-01, TP-CART-05-02]
+    title: 合并后数量不超过库存
+    steps: ["管理员创建 stock=5 的商品 P 和 stock=0 的商品 Q", "买家添加 P 3 件，再加 3 件", "再加 2 件", "添加 Q 1 件"]
+    expected: "加 3 件得 6 时 400 且 quantity 仍为 3；加 2 件得 5 时 201；添加 Q 返回 400 且 cart_items 无 Q"
+    testable: api
+  - id: TC-CART-009
+    test_points: [TP-CART-06-01]
+    title: 购物车请求体校验
+    steps: ["分别以 quantity=0、-1、101、abc，缺 product_id、缺 quantity 调用 POST /api/cart/items"]
+    expected: "均 422；cart_items 不变"
+    testable: api
+  - id: TC-CART-010
+    test_points: [TP-CART-07-01]
+    title: 修改购物车数量
+    steps: ["买家添加商品 quantity=2", "PUT /api/cart/items/{product_id} body product_id 相同 quantity=4"]
+    expected: "200；该项 quantity == 4（设置而非相加），数据库一致"
+    testable: api
+  - id: TC-CART-011
+    test_points: [TP-CART-07-02]
+    title: 修改数量库存边界
+    steps: ["管理员创建 stock=5 的商品，买家添加 1 件", "PUT quantity=5", "PUT quantity=6"]
+    expected: "quantity=5 返回 200；quantity=6 的状态码与数据库变化待 Q-06 确认"
+    testable: api
+  - id: TC-CART-012
+    test_points: [TP-CART-08-01, TP-CART-08-02]
+    title: 修改数量路径不一致或项不存在
+    steps: ["买家购物车有商品 P1", "PUT /api/cart/items/P1 body product_id=P2", "PUT /api/cart/items/P2（购物车无 P2）body product_id=P2"]
+    expected: "路径不一致请求失败（状态码待 Q-05）；不存在项返回 404；cart_items 不变"
+    testable: api
+  - id: TC-CART-013
+    test_points: [TP-CART-09-01]
+    title: 删除购物车项
+    steps: ["买家添加 P1 和 P2", "DELETE /api/cart/items/P1"]
+    expected: "200；返回购物车只含 P2；数据库 P1 行被删除"
+    testable: api
+  - id: TC-CART-014
+    test_points: [TP-CART-09-02]
+    title: 删除不存在的购物车项
+    steps: ["DELETE /api/cart/items/{购物车中没有的商品 id}", "DELETE /api/cart/items/abc"]
+    expected: "前者 404；后者 422；cart_items 不变"
+    testable: api
+  - id: TC-CART-015
+    test_points: [TP-CART-09-03]
+    title: 删除他人购物车中的商品
+    steps: ["B 添加 P1，A 购物车为空", "A DELETE /api/cart/items/P1"]
+    expected: "404；B 的 P1 项仍存在且数量不变"
+    testable: api
+  - id: TC-CART-016
+    test_points: [TP-CART-10-01, TP-CART-10-02]
+    title: 清空购物车
+    steps: ["A 添加 2 个商品，B 添加 1 个商品，记录库存", "A DELETE /api/cart", "A 再次 DELETE /api/cart"]
+    expected: "两次均 200 且 items 为空；A 的 cart_items 为 0；B 的 1 行不变；商品库存不变"
+    testable: api
+  - id: TC-COUPON-001
+    test_points: [TP-COUPON-01-01, TP-COUPON-01-02]
+    title: 管理员创建优惠券
+    steps: ["记录 coupons 行数", "管理员 POST /api/coupons code=随机大写 discount_percent=10 max_uses=5"]
+    expected: "201；code、discount_percent、max_uses 与请求一致，used_count == 0；coupons 行数 +1 且字段一致（初始 status 待 Q-09）"
+    testable: api
+  - id: TC-COUPON-002
+    test_points: [TP-COUPON-02-01, TP-COUPON-02-03]
+    title: 折扣比例边界
+    steps: ["管理员分别创建 discount_percent=0.01、100", "分别创建 discount_percent=0、-1、100.01"]
+    expected: "0.01 和 100 返回 201；其余 422 且 coupons 行数不变"
+    testable: api
+  - id: TC-COUPON-003
+    test_points: [TP-COUPON-02-02, TP-COUPON-02-03]
+    title: 优惠券 code 格式与必填
+    steps: ["管理员分别以 code=save10、SAVE 10、SAVE.10、优惠10 创建", "分别缺 code、discount_percent、max_uses"]
+    expected: "均 422；coupons 行数不变"
+    testable: api
+  - id: TC-COUPON-004
+    test_points: [TP-COUPON-03-01, TP-COUPON-03-02]
+    title: 重复创建优惠券
+    steps: ["管理员创建 code=C1 discount_percent=10", "再次创建 code=C1 discount_percent=50"]
+    expected: "第二次 409；数据库 code=C1 只有一行且 discount_percent 仍为 10"
+    testable: api
+  - id: TC-COUPON-005
+    test_points: [TP-COUPON-03-03]
+    title: 并发创建同一 code
+    steps: ["管理员并发 5 次创建相同 code"]
+    expected: "恰好 1 个 201，其余 409；数据库该 code 只有一行"
+    testable: api
+  - id: TC-COUPON-006
+    test_points: [TP-COUPON-04-01]
+    title: 查询可用优惠券
+    steps: ["管理员创建优惠券", "买家 GET /api/coupons"]
+    expected: "200；结果包含新券，字段与数据库一致（是否需认证、是否过滤 exhausted 待 Q-08）"
+    testable: api
+  - id: TC-COUPON-007
+    test_points: [TP-COUPON-05-01, TP-COUPON-05-02]
+    title: 使用优惠券下单
+    steps: ["管理员创建 price=100 stock=10 商品和 10% 券 max_uses=5", "记录余额、库存、订单数、used_count", "买家下单 2 件带 coupon_code", "买家支付该订单"]
+    expected: "下单 201；amount == 180.0，coupon_code == 该券；库存减 2，订单数 +1，used_count == 1，下单后余额不变；支付后余额减 180.0"
+    testable: api
+  - id: TC-COUPON-008
+    test_points: [TP-COUPON-06-01]
+    title: 折后金额计算边界
+    steps: ["100% 券购买 price=50 商品 1 件并支付", "10% 券购买 price=9.99 商品 3 件并支付"]
+    expected: "第一单 amount == 0.0，支付后余额不变；第二单 amount == 26.97（26.973 取两位），支付后余额减 26.97"
+    testable: api
+  - id: TC-COUPON-009
+    test_points: [TP-COUPON-07-01, TP-COUPON-07-02]
+    title: 使用已耗尽优惠券
+    steps: ["创建 max_uses=1 的券，买家 A 使用一次", "记录买家 B 余额、库存、订单数、券 used_count/status", "买家 B 带该券下单"]
+    expected: "400；B 余额、库存、订单数不变；used_count 仍为 1，status 仍为 exhausted"
+    testable: api
+  - id: TC-COUPON-010
+    test_points: [TP-COUPON-11-01]
+    title: 并发超额使用优惠券
+    steps: ["创建 max_uses=1 的券和充足库存商品", "5 个买家并发带券下单"]
+    expected: "恰好 1 个 201、4 个 400；used_count == 1；订单表中带该券的订单 1 条；库存只减 1"
+    testable: api
+  - id: TC-COUPON-011
+    test_points: [TP-COUPON-08-01]
+    title: 达到使用次数后状态为 exhausted
+    steps: ["创建 max_uses=2 的券", "买家下单使用 1 次，查询券", "再下单使用 1 次，查询券"]
+    expected: "第 1 次后 status == active、used_count == 1；第 2 次后 status == exhausted、used_count == 2"
+    testable: api
+  - id: TC-COUPON-012
+    test_points: [TP-COUPON-09-01, TP-COUPON-09-02]
+    title: 取消使用优惠券的订单
+    steps: ["创建 max_uses=1 的券，买家带券下单使其 exhausted，记录下单前余额 B", "取消该订单", "另一买家带券下单"]
+    expected: "取消后 used_count == 0，status == active，余额 == B（未支付无退款）；再次带券下单 201"
+    testable: api
+  - id: TC-COUPON-013
+    test_points: [TP-COUPON-10-01]
+    title: 其他前置条件失败时券次数不变
+    steps: ["创建有效券", "带券分别对库存不足、已下架商品下单"]
+    expected: "均 400；used_count 与 status 不变；库存、余额、订单数不变"
+    testable: api
+  - id: TC-INV-001
+    test_points: [TP-INV-01-01, TP-INV-01-02]
+    title: 下单产生扣减流水
+    steps: ["管理员创建商品，记录该商品流水数", "买家下单 3 件", "GET /api/inventory/{product_id}/transactions"]
+    expected: "200；流水数 +1；新流水 product_id 正确，quantity_change == -3，reason == order_created"
+    testable: api
+  - id: TC-INV-002
+    test_points: [TP-INV-02-01, TP-INV-02-02]
+    title: 取消产生恢复流水
+    steps: ["买家下单 3 件后取消", "查询该商品流水"]
+    expected: "新增一条 quantity_change == 3，reason == order_cancelled，reference_id == 订单 id；该商品流水 quantity_change 之和 == 0"
+    testable: api
+  - id: TC-INV-003
+    test_points: [TP-INV-03-01]
+    title: 失败操作不产生流水
+    steps: ["记录商品流水数", "依次执行库存不足下单、下架商品下单、耗尽券下单、重复支付、取消已支付订单、取消已取消订单"]
+    expected: "每步失败后流水数与该步之前相同（仅前置成功的下单/取消产生流水）"
+    testable: api
+  - id: TC-INV-004
+    test_points: [TP-INV-04-01]
+    title: 流水只返回指定商品
+    steps: ["对商品 A 和 B 各下单一次", "查询 A 的流水"]
+    expected: "200；所有记录 product_id == A，不含 B 的流水"
+    testable: api
+  - id: TC-INV-005
+    test_points: [TP-INV-04-02]
+    title: 流水查询需登录
+    steps: ["不带 Token GET /api/inventory/{product_id}/transactions"]
+    expected: "401"
+    testable: api
+  - id: TC-INV-006
+    test_points: [TP-INV-04-03]
+    title: 流水查询商品不存在或 ID 非法
+    steps: ["登录后查询不存在的商品流水", "查询 product_id=abc"]
+    expected: "前者 404；后者 422"
+    testable: api
+  - id: TC-SEC-001
+    test_points: [TP-SEC-01-01]
+    title: 拒绝其他服务签发的 Token
+    steps: ["用测试密钥分别构造 aud=other-service、缺 aud、缺 exp 的 JWT", "用随机密钥签名一个 aud=mini-shop 的 JWT", "分别调用 GET /api/auth/me"]
+    expected: "均 401，WWW-Authenticate == Bearer"
+    testable: api
+  - id: TC-SEC-002
+    test_points: [TP-SEC-02-01]
+    title: 密码加盐哈希
+    steps: ["用相同密码注册两个用户", "读取两行 password_hash"]
+    expected: "两个 password_hash 不相同；格式标识为 PBKDF2-SHA256（如 pbkdf2_sha256 前缀）且含盐段"
+    testable: api
+  - id: TC-SEC-003
+    test_points: [TP-SEC-03-01]
+    title: 响应不泄露密码
+    steps: ["注册、登录、GET me、下单、GET 订单、GET 购物车，收集所有响应体"]
+    expected: "所有响应 JSON 中无 password、password_hash 键，响应文本不含明文密码和数据库中的哈希值"
+    testable: api
+  - id: TC-SEC-004
+    test_points: [TP-SEC-04-01]
+    title: 测试证据不含敏感信息
+    steps: ["执行完整测试后检查报告与证据目录", "搜索 access_token 值、测试密码、数据库连接串"]
+    expected: "均未出现，或已脱敏"
+    testable: manual
+    reason: 检查对象是测试框架产出的报告文件，不是被测接口行为
+  - id: TC-SEC-005
+    test_points: [TP-SEC-05-01]
+    title: 未配置密钥时每次启动随机生成
+    steps: ["不设置 APP_SECRET_KEY 启动服务并登录取 token", "重启服务", "用旧 token 调用 GET /api/auth/me", "审查代码中无硬编码密钥"]
+    expected: "重启后旧 token 返回 401；代码中无常量密钥"
+    testable: manual
+    reason: 需要控制服务启动配置并重启服务，且包含代码审查
+  - id: TC-TRACE-001
+    test_points: [TP-TRACE-01-01]
+    title: 运行时契约与基线一致
+    steps: ["GET /openapi.json", "与 contracts/mini_shop.openapi.json 比较路径、方法、必填字段"]
+    expected: "200；无删除的路径/方法，无新增必填字段等破坏性变化"
+    testable: api
+  - id: TC-TRACE-002
+    test_points: [TP-TRACE-02-01]
+    title: 缺少证据时结论为 INCONCLUSIVE
+    steps: ["构造一个关键业务用例的执行记录，删除数据库 before/after 快照", "生成报告"]
+    expected: "报告结论为 INCONCLUSIVE，不为 PASS"
+    testable: manual
+    reason: 验证对象是测试报告生成流程，不是被测服务接口
+  - id: TC-TRACE-003
+    test_points: [TP-TRACE-03-01]
+    title: 测试请求携带唯一 request_id
+    steps: ["执行一次包含多个接口用例的测试运行", "检查报告证据中的每条 HTTP 请求记录"]
+    expected: "每条请求记录都有 request_id；同一次运行内 request_id 无重复"
+    testable: manual
+    reason: 验证对象是测试框架和报告证据，不是被测服务接口
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
